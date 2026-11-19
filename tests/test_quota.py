@@ -353,7 +353,7 @@ def test_snapshot_treats_non_object_day_bucket_as_empty(tmp_path):
     assert store.snapshot() == {}
 
 
-@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}])
+@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}, float("inf"), float("-inf"), float("nan")])
 def test_non_numeric_counter_values_are_treated_as_zero(tmp_path, bad):
     import json
 

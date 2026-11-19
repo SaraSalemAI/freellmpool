@@ -43,7 +43,7 @@ def _count(value: Any) -> int:
     """A stored counter as an int; malformed persisted values count as 0."""
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
