@@ -242,7 +242,9 @@ class QuotaStore:
         with self._file_lock():
             merged = self._load_for_write()
             for day, changes in self._pending_counts.items():
-                bucket = merged.setdefault(day, {})
+                bucket = merged.get(day)
+                if not isinstance(bucket, dict):
+                    bucket = merged[day] = {}
                 for key, amount in changes.items():
                     bucket[key] = int(bucket.get(key, 0)) + amount
             old_data = self._data

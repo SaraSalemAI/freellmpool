@@ -15,9 +15,7 @@ stop publication immediately.
 set -euo pipefail
 python3 -m pip install -e ".[dev,security]"
 ruff check .
-python3 -m mypy --follow-imports=skip src/freellmpool/routing_modes.py \
-  src/freellmpool/catalog_validation.py src/freellmpool/_version.py \
-  src/freellmpool/readiness.py
+python3 -m mypy src/freellmpool
 PYTHONPATH=src python3 -m pytest
 PYTHONPATH=src python3 -m pytest --cov=freellmpool --cov-branch \
   --cov-report=term-missing --cov-report=json:.coverage.json
