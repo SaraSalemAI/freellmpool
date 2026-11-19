@@ -103,7 +103,8 @@ class QuotaStore:
     def _load(self) -> dict[str, Any]:
         try:
             with self.path.open("r", encoding="utf-8") as fh:
-                return cast(dict[str, Any], json.load(fh))
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return {}
 
@@ -160,7 +161,7 @@ class QuotaStore:
     def _today(self) -> dict[str, Any]:
         day = _utc_day(self._clock())
         bucket = self._data.get(day)
-        if bucket is None:
+        if not isinstance(bucket, dict):
             # New UTC day → drop stale buckets to keep the file small.
             self._data = {day: {}}
             bucket = self._data[day]

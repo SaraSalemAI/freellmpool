@@ -725,7 +725,7 @@ def _import_or_create_provider(provider_name: str, args: argparse.Namespace) -> 
         if not model and not args.yes:
             model = input("Default model id: ").strip()
     try:
-        local_id = create_user_provider_stub(name=provider_name, base_url=base_url, model=cast(str, model))
+        local_id = create_user_provider_stub(name=provider_name, base_url=base_url, model=model or "")
     except ValueError as exc:
         print(f"Could not create provider: {exc}", file=sys.stderr)
         return None
