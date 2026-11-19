@@ -87,14 +87,11 @@ def test_ci_validates_opencode_packages_with_current_runtimes() -> None:
         assert required in job
 
 
-def test_ci_strictly_checks_focused_helpers_without_recursive_debt() -> None:
+def test_ci_strictly_type_checks_the_whole_package() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert (
-        "mypy --follow-imports=skip src/freellmpool/routing_modes.py "
-        "src/freellmpool/catalog_validation.py src/freellmpool/_version.py "
-        "src/freellmpool/readiness.py"
-    ) in workflow
+    assert "run: mypy src/freellmpool\n" in workflow
+    assert "--follow-imports=skip" not in workflow
 
 
 def test_opencode_publish_workflow_is_manual_protected_and_exact_sha() -> None:
