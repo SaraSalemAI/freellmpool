@@ -39,6 +39,14 @@ if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_live_stores_after_fork)
 
 
+def _count(value: Any) -> int:
+    """A stored counter as an int; malformed persisted values count as 0."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _utc_day(now: datetime | None = None) -> str:
     now = now or datetime.now(UTC)
     return now.astimezone(UTC).strftime("%Y-%m-%d")
@@ -174,7 +182,7 @@ class QuotaStore:
     def used(self, provider_id: str, model: str) -> int:
         with self._lock:
             self._prepare_after_fork_locked()
-            return int(self._today().get(self._key(provider_id, model), 0))
+            return _count(self._today().get(self._key(provider_id, model)))
 
     def record(self, provider_id: str, model: str, n: int = 1) -> int:
         with self._lock:
@@ -185,7 +193,7 @@ class QuotaStore:
             day = _utc_day(self._clock())
             bucket = self._today()
             key = self._key(provider_id, model)
-            bucket[key] = int(bucket.get(key, 0)) + n
+            bucket[key] = _count(bucket.get(key)) + n
             self._pending_counts.setdefault(day, {})
             self._pending_counts[day][key] = int(self._pending_counts[day].get(key, 0)) + n
             self._pending_ops += 1
@@ -203,7 +211,7 @@ class QuotaStore:
             self._data = self._load_for_write()
             bucket = self._today()
             key = self._key(provider_id, model)
-            bucket[key] = int(bucket.get(key, 0)) + n
+            bucket[key] = _count(bucket.get(key)) + n
             count = bucket[key]
             try:
                 self._save()
@@ -246,7 +254,7 @@ class QuotaStore:
                 if not isinstance(bucket, dict):
                     bucket = merged[day] = {}
                 for key, amount in changes.items():
-                    bucket[key] = int(bucket.get(key, 0)) + amount
+                    bucket[key] = _count(bucket.get(key)) + amount
             old_data = self._data
             self._data = merged
             try:
@@ -274,8 +282,12 @@ class QuotaStore:
             current_day = _utc_day(self._clock())
             loaded = self._load()
             raw_bucket = loaded.get(current_day)
-            bucket = dict(raw_bucket) if isinstance(raw_bucket, dict) else {}
+            bucket = (
+                {k: _count(v) for k, v in raw_bucket.items()}
+                if isinstance(raw_bucket, dict)
+                else {}
+            )
             for key, amount in self._pending_counts.get(current_day, {}).items():
-                bucket[key] = int(bucket.get(key, 0)) + amount
+                bucket[key] = _count(bucket.get(key)) + amount
             self._data = {current_day: bucket}
             return bucket

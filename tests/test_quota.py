@@ -351,3 +351,23 @@ def test_snapshot_treats_non_object_day_bucket_as_empty(tmp_path):
     path.write_text(json.dumps({_utc_day(store._clock()): ["bad"]}), encoding="utf-8")
     store = QuotaStore(path=path)
     assert store.snapshot() == {}
+
+
+@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}])
+def test_non_numeric_counter_values_are_treated_as_zero(tmp_path, bad):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    day = _utc_day(store._clock())
+    key = store._key("p", "m")
+    path.write_text(json.dumps({day: {key: bad, "other::m": 5}}), encoding="utf-8")
+    store = QuotaStore(path=path, flush_every=100)
+    assert store.used("p", "m") == 0
+    assert store.record("p", "m") == 1
+    snap = store.snapshot()
+    assert snap[key] == 1
+    assert snap["other::m"] == 5
+    assert all(isinstance(v, int) for v in snap.values())
