@@ -313,6 +313,16 @@ def test_non_object_quota_file_is_treated_as_empty(tmp_path):
     assert store.used("p", "m") == 0
 
 
+def test_oversized_integer_quota_file_is_treated_as_empty(tmp_path):
+    from freellmpool.quota import QuotaStore
+
+    path = tmp_path / "quota.json"
+    path.write_text("1" * 4301, encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.used("p", "m") == 0
+    assert store.snapshot() == {}
+
+
 def test_non_object_day_bucket_is_reset(tmp_path):
     import json
 

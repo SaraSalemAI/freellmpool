@@ -123,7 +123,7 @@ class QuotaStore:
             with self.path.open("r", encoding="utf-8") as fh:
                 data = json.load(fh)
             return data if isinstance(data, dict) else {}
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+        except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
             return {}
 
     def _load_for_write(self) -> dict[str, Any]:
