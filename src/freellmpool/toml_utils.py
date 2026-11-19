@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 # TOML basic strings must escape backslash, double-quote, and control characters
 # (newline, CR, etc.). Tab is allowed literally. Anything generated from
 # untrusted input (e.g. the external provider catalog) is run through this so a
@@ -29,7 +31,7 @@ def toml_escape(value: str) -> str:
     return "".join(out)
 
 
-def toml_value(value) -> str:
+def toml_value(value: Any) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, (int, float)):
@@ -37,7 +39,7 @@ def toml_value(value) -> str:
     return f'"{toml_escape(str(value))}"'
 
 
-def dump_simple_toml(data: dict[str, dict]) -> str:
+def dump_simple_toml(data: dict[str, dict[str, Any]]) -> str:
     chunks = []
     for table, values in data.items():
         lines = [f"[{table}]"]

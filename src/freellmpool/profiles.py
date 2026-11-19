@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 _CLIENT_KINDS = ("openai", "anthropic", "mcp", "shell")
@@ -597,7 +597,7 @@ def render_doctor_plan(profile: Profile) -> str:
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Keep a configured proxy token on the exact endpoint the user selected."""
 
-    def redirect_request(self, *args, **kwargs):  # noqa: D102
+    def redirect_request(self, *args: Any, **kwargs: Any) -> Any:  # noqa: D102
         return None
 
 
@@ -613,7 +613,7 @@ def run_doctor_check(
     check: DoctorCheck,
     *,
     timeout: float = 2.0,
-    opener=None,
+    opener: Any = None,
     env: Mapping[str, str] | None = None,
     proxy_key: str | None = None,
 ) -> tuple[DoctorStatus, str]:
@@ -685,7 +685,7 @@ def run_doctor(
     profile: Profile,
     *,
     timeout: float = 2.0,
-    opener=None,
+    opener: Any = None,
     env: Mapping[str, str] | None = None,
     proxy_key: str | None = None,
 ) -> tuple[int, list[str]]:

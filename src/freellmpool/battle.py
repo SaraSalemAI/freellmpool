@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .panel import (
     DEFAULT_PANEL_COUNT,
     MAX_PANEL_COUNT,
@@ -67,7 +69,7 @@ def render_battle_markdown(result: PanelResult) -> str:
     return "\n".join(lines).rstrip()
 
 
-def battle_to_dict(result: PanelResult) -> dict:
+def battle_to_dict(result: PanelResult) -> dict[str, Any]:
     return {
         "prompt": result.prompt,
         "requested_count": result.requested_count,
@@ -99,7 +101,7 @@ def battle_to_dict(result: PanelResult) -> dict:
     }
 
 
-def write_battle_record(result: PanelResult, *, store=None):
+def write_battle_record(result: PanelResult, *, store: Any = None) -> Any:
     from .artifacts import RunRecordStore
 
     payload = battle_to_dict(result)

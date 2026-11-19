@@ -7,6 +7,8 @@ surface intact for existing users and tests.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .profiles import PROFILES, Profile, get_profile, render_profile_quickstart
 
 
@@ -21,7 +23,7 @@ def _legacy_steps(profile: Profile) -> list[str]:
     return steps
 
 
-AGENTS: dict[str, dict] = {
+AGENTS: dict[str, dict[str, Any]] = {
     name: {
         "label": profile.label,
         "steps": _legacy_steps(profile),

@@ -377,7 +377,7 @@ def _shell_safe_setup_lines(text: str) -> list[str]:
     return lines
 
 
-def _missing_env(provider, env: dict[str, str]) -> tuple[str, ...]:
+def _missing_env(provider: Any, env: dict[str, str]) -> tuple[str, ...]:
     missing = [name for name in provider.extra_env if not env.get(name)]
     if not provider.keyless and provider.key_env and not env.get(provider.key_env):
         missing.append(provider.key_env)
@@ -398,7 +398,7 @@ def _provider_catalog_path(env: dict[str, str]) -> Path:
     return Path.home() / ".config" / "freellmpool" / "providers.toml"
 
 
-def _int_setting(value: object, default: int) -> int:
+def _int_setting(value: Any, default: int) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):

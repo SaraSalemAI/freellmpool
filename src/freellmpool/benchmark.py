@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Any
 
 from . import client as _client
 from .catalog import discover_openai_models
@@ -32,18 +33,18 @@ class BenchRow:
     error: str | None
 
 
-def _pick_model(provider, model: str | None) -> str | None:
+def _pick_model(provider: Any, model: str | None) -> str | None:
     if model:
         m = provider.model(model)
         return m.name if m else None
     for m in provider.models:
         if m.enabled:
-            return m.name
+            return str(m.name)
     return provider.models[0].name if provider.models else None
 
 
 def _pick_model_for_health(
-    provider, model: str | None, pool: Pool, timeout: float
+    provider: Any, model: str | None, pool: Pool, timeout: float
 ) -> tuple[str | None, str | None]:
     """Pick a probe model, preferring ids currently listed by /models.
 
@@ -82,7 +83,7 @@ def benchmark(
     pool: Pool,
     *,
     model: str | None = None,
-    providers=None,
+    providers: Any = None,
     prompt: str = _PROMPT,
     max_tokens: int = 16,
     timeout: float = 30.0,
@@ -93,7 +94,7 @@ def benchmark(
     include = {p.strip() for p in providers} if providers else None
     candidates = [p for p in pool.providers if include is None or p.id in include]
 
-    def run(provider) -> BenchRow | None:
+    def run(provider: Any) -> BenchRow | None:
         # Model selection (incl. the /models discovery probe) runs INSIDE the worker so it's
         # parallelized across the pool — not serialized before the threadpool, which would add
         # up to N*min(timeout,10s) of preflight latency on slow endpoints.

@@ -25,7 +25,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import TextIO
+from typing import Any, TextIO
 
 # Tailscale assigns CGNAT-style 100.64.0.0/10 addresses to nodes. We
 # treat any 100.64.0.0/10 address as a valid Tailnet IPv4 and refuse
@@ -180,7 +180,7 @@ def _classify_ipv4_output(raw: str) -> TailnetStatus | None:
 def detect_tailnet(
     *,
     binary: str | None = "tailscale",
-    runner=None,
+    runner: Any = None,
     timeout: float = _TAILSCALE_TIMEOUT_SECONDS,
 ) -> TailnetStatus:
     """Detect the local Tailscale Tailnet IPv4 address.

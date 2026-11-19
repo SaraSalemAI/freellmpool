@@ -152,7 +152,7 @@ def upsert_config_key(env_var: str, value: str, path: Path | None = None) -> Pat
     but does not preserve comments. It is used by the interactive CLI helper.
     """
     path = path or default_config_path()
-    data: dict[str, dict] = {}
+    data: dict[str, dict[str, Any]] = {}
     try:
         with path.open("rb") as fh:
             raw = tomllib.load(fh)
@@ -168,13 +168,13 @@ def upsert_config_key(env_var: str, value: str, path: Path | None = None) -> Pat
     # also narrows an already-existing file, which O_CREAT's mode would not touch.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        fh = os.fdopen(fd, "w", encoding="utf-8")  # takes ownership of fd
+        text_fh = os.fdopen(fd, "w", encoding="utf-8")  # takes ownership of fd
     except BaseException:
         os.close(fd)  # fdopen failed — close the raw fd ourselves
         raise
-    with fh:  # closes fd on exit
+    with text_fh:  # closes fd on exit
         _restrict_owner_read_write(fd)  # narrow an already-existing file too
-        fh.write(dump_simple_toml(data))
+        text_fh.write(dump_simple_toml(data))
     return path
 
 

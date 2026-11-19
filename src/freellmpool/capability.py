@@ -29,6 +29,7 @@ from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any
 
 from .context import estimate_input_tokens
 
@@ -258,7 +259,7 @@ _HARD_RE = re.compile(
 )
 
 
-def _messages_text(messages) -> tuple[str, int]:
+def _messages_text(messages: Any) -> tuple[str, int]:
     """Concatenated text of all messages, plus the user/assistant turn count."""
     parts: list[str] = []
     turns = 0
@@ -277,7 +278,7 @@ def _messages_text(messages) -> tuple[str, int]:
     return "\n".join(parts), turns
 
 
-def prompt_difficulty(messages, max_tokens: int | None = None, tools=None) -> float:
+def prompt_difficulty(messages: Any, max_tokens: int | None = None, tools: Any = None) -> float:
     """Estimate how much capability a request needs, on 0–1.
 
     Cheap, dependency-free heuristics: input size (reusing the chars/4 token
@@ -368,7 +369,7 @@ def build_capability_table(
     arena_scores: dict[str, float] | None = None,
     aider_scores: dict[str, float] | None = None,
     catalog_names: list[str] | None = None,
-) -> dict[str, dict]:
+) -> dict[str, dict[str, Any]]:
     """Resolve per-model capability with precedence Artificial Analysis → Arena →
     Aider → (runtime) heuristic, restricted to the catalog's model names.
 
@@ -408,7 +409,7 @@ def build_capability_table(
             stem_keys.setdefault(_alnum(_strip_params(key)), set()).add(key)
     ambiguous_stems = {stem for stem, keys in stem_keys.items() if len(keys) > 1}
 
-    table: dict[str, dict] = {}
+    table: dict[str, dict[str, Any]] = {}
     for name in catalog_names:
         key = normalize_model_name(name)
         if not key or key in table:
@@ -441,7 +442,7 @@ def _leading_family(key: str) -> str:
     return fam if len(fam) >= 4 else ""
 
 
-def _index_source(label: str, norm_scores: dict[str, float]) -> dict:
+def _index_source(label: str, norm_scores: dict[str, float]) -> dict[str, Any]:
     """Precompute the lookup indexes for one benchmark source:
     exact-by-name, alphanumeric-core, paramless-core (only entries without a size
     token, for matching a sized catalog name to an unsized benchmark name), a
@@ -476,8 +477,8 @@ def _index_source(label: str, norm_scores: dict[str, float]) -> dict:
 
 
 def _resolve_capability(
-    key: str, resolvers: list[dict], families: set[str], ambiguous_stems: set[str]
-) -> dict | None:
+    key: str, resolvers: list[dict[str, Any]], families: set[str], ambiguous_stems: set[str]
+) -> dict[str, Any] | None:
     """Resolve one normalized model key against ordered resolvers (AA → Arena → Aider).
 
     Tries, in order: exact name, alphanumeric core, then a sized→unsized core match
@@ -532,7 +533,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Never auto-follow redirects, so a request carrying an API key can't forward
     it to a redirect target (credential leak / SSRF)."""
 
-    def redirect_request(self, *args, **kwargs):  # noqa: D102
+    def redirect_request(self, *args: Any, **kwargs: Any) -> Any:  # noqa: D102
         return None
 
 
@@ -547,10 +548,10 @@ def _get_text(url: str, *, timeout: float, headers: dict[str, str] | None = None
         raw = response.read(_MAX_FETCH_BYTES + 1)
     if len(raw) > _MAX_FETCH_BYTES:
         raise ValueError(f"benchmark response exceeds {_MAX_FETCH_BYTES} bytes; refusing to load")
-    return raw.decode("utf-8")
+    return str(raw.decode("utf-8"))
 
 
-def _get_json(url: str, *, timeout: float, headers: dict[str, str] | None = None):
+def _get_json(url: str, *, timeout: float, headers: dict[str, str] | None = None) -> Any:
     return json.loads(_get_text(url, timeout=timeout, headers=headers))
 
 
@@ -651,7 +652,7 @@ def sync_capability_table(
     aa_api_key: str | None = None,
     aa_url: str = AA_DEFAULT_URL,
     path: Path | None = None,
-) -> tuple[Path, dict]:
+) -> tuple[Path, dict[str, Any]]:
     """Fetch benchmarks, rebuild the score table, and write the user cache.
 
     Returns ``(path, stats)`` where ``stats`` reports how many models were mapped

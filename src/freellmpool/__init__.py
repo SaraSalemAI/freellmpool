@@ -9,6 +9,8 @@ Public API:
     print(reply.text)
 """
 
+from typing import Any
+
 from ._version import __version__
 from .errors import (
     AllProvidersExhausted,
@@ -22,7 +24,7 @@ from .plugins import register_adapter, register_provider
 from .router import Pool
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     # Lazy so importing freellmpool never imports the async stack (httpx.AsyncClient)
     # unless someone actually asks for AsyncPool.
     if name == "AsyncPool":

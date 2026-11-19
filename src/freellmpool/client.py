@@ -23,6 +23,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
+from typing import Any, cast
 
 from ._version import __version__
 from .errors import ProviderHTTPError
@@ -57,7 +58,7 @@ def _strip_think(text: str) -> str:
     return _THINK_RE.sub("", text).strip()
 
 
-def _content_text(content) -> str:
+def _content_text(content: Any) -> str:
     """Coerce an OpenAI-style ``content`` to text. Providers may return a plain
     string, a list of content-part dicts (``[{"type":"text","text":...}]``), or
     null — none of which should crash response parsing."""
@@ -71,19 +72,19 @@ def _content_text(content) -> str:
 @dataclass
 class HTTPResult:
     status: int
-    body: dict
+    body: dict[str, Any]
     text: str
-    headers: dict | None = None
+    headers: dict[str, Any] | None = None
 
 
-PostFn = Callable[[str, dict, dict, float], HTTPResult]
+PostFn = Callable[[str, dict[str, Any], dict[str, Any], float], HTTPResult]
 # A streaming transport returns (status, iterable-of-SSE-lines). The iterable
 # keeps the connection open until exhausted/closed.
 from collections.abc import Iterable, Iterator  # noqa: E402
 
 StreamPostFn = Callable[
-    [str, dict, dict, float],
-    "tuple[int, Iterable[str]] | tuple[int, dict, Iterable[str]]",
+    [str, dict[str, Any], dict[str, Any], float],
+    "tuple[int, Iterable[str]] | tuple[int, dict[str, Any], Iterable[str]]",
 ]
 
 _USER_AGENT = f"freellmpool/{__version__} (+https://github.com/0xzr/freellmpool)"
@@ -100,7 +101,7 @@ _shared = None  # one pooled, keep-alive httpx.Client shared across calls/thread
 _shared_lock = threading.Lock()
 
 
-def _client():
+def _client() -> Any:
     """A process-wide pooled httpx.Client. Reusing connections (keep-alive) avoids
     a TCP+TLS handshake on every request — a big win for repeated calls to the
     same provider (agent loops). httpx.Client is thread-safe."""
@@ -127,7 +128,7 @@ def _client():
     return _shared
 
 
-def _timeout(timeout: float):
+def _timeout(timeout: float) -> Any:
     import httpx
 
     return httpx.Timeout(timeout, connect=min(_CONNECT_TIMEOUT, timeout))
@@ -135,8 +136,8 @@ def _timeout(timeout: float):
 
 def default_post(
     url: str,
-    headers: dict,
-    json_body: dict,
+    headers: dict[str, Any],
+    json_body: dict[str, Any],
     timeout: float,
     *,
     max_attempts: int | None = None,
@@ -188,7 +189,7 @@ def default_post(
 
 
 def _post_once(
-    url: str, headers: dict, json_body: dict, timeout: float, deadline: float
+    url: str, headers: dict[str, Any], json_body: dict[str, Any], timeout: float, deadline: float
 ) -> HTTPResult:
     with _client().stream(
         "POST", url, headers=headers, json=json_body, timeout=_timeout(timeout)
@@ -199,7 +200,7 @@ def _post_once(
     return _json_result(status, raw, text, headers=headers)
 
 
-def _read_capped_response(chunks, deadline: float, timeout: float) -> tuple[bytes, str]:
+def _read_capped_response(chunks: Any, deadline: float, timeout: float) -> tuple[bytes, str]:
     out: list[bytes] = []
     total = 0
     for chunk in chunks:
@@ -215,7 +216,7 @@ def _read_capped_response(chunks, deadline: float, timeout: float) -> tuple[byte
     return raw, raw.decode("utf-8", "replace")
 
 
-def _json_result(status: int, raw: bytes, text: str, headers: dict | None = None) -> HTTPResult:
+def _json_result(status: int, raw: bytes, text: str, headers: dict[str, Any] | None = None) -> HTTPResult:
     try:
         body = json.loads(raw) if raw else {}
         if not isinstance(body, dict):
@@ -225,7 +226,7 @@ def _json_result(status: int, raw: bytes, text: str, headers: dict | None = None
     return HTTPResult(status=status, body=body, text=text, headers=headers)
 
 
-def _header(headers: dict | None, name: str) -> str | None:
+def _header(headers: dict[str, Any] | None, name: str) -> str | None:
     if not headers:
         return None
     direct = headers.get(name)
@@ -238,7 +239,7 @@ def _header(headers: dict | None, name: str) -> str | None:
     return None
 
 
-def _retry_after_seconds(headers: dict | None) -> float | None:
+def _retry_after_seconds(headers: dict[str, Any] | None) -> float | None:
     raw = _header(headers, "Retry-After")
     if raw:
         raw = raw.strip()
@@ -277,14 +278,14 @@ def _retry_delay(result: HTTPResult | None, attempt: int, deadline: float) -> fl
 
 
 def _retry_delay_monotonic(
-    result: HTTPResult | None, attempt: int, deadline: float, now
+    result: HTTPResult | None, attempt: int, deadline: float, now: Any
 ) -> float | None:
     base = _retry_after_seconds(result.headers if result is not None else None)
     return _retry_delay_seconds(base, attempt, deadline, now)
 
 
 def _retry_delay_seconds(
-    retry_after: float | None, attempt: int, deadline: float, now
+    retry_after: float | None, attempt: int, deadline: float, now: Any
 ) -> float | None:
     """Return one bounded retry delay from already-parsed provider guidance."""
     base = retry_after
@@ -295,7 +296,7 @@ def _retry_delay_seconds(
     return delay if now() + delay < deadline else None
 
 
-def _retryable_transport_error(exc, httpx) -> bool:
+def _retryable_transport_error(exc: Any, httpx: Any) -> bool:
     return isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout))
 
 
@@ -320,11 +321,11 @@ class _StreamLines:
 
     def __init__(
         self,
-        cm,
-        resp,
+        cm: Any,
+        resp: Any,
         deadline: float | None = None,
         max_line_chars: int = _MAX_STREAM_LINE_CHARS,
-    ):
+    ) -> None:
         self._cm, self._resp = cm, resp
         self._closed = False
         self._deadline = deadline  # monotonic wall-clock cap on the whole stream
@@ -382,7 +383,7 @@ class _StreamLines:
             pass
 
 
-def default_stream_post(url: str, headers: dict, json_body: dict, timeout: float):
+def default_stream_post(url: str, headers: dict[str, Any], json_body: dict[str, Any], timeout: float) -> Any:
     """Open a streaming POST and retain response headers for reset guidance."""
     deadline = time.monotonic() + timeout
     cm = _client().stream("POST", url, headers=headers, json=json_body, timeout=_timeout(timeout))
@@ -527,10 +528,10 @@ def _provider_http_error(result: HTTPResult) -> ProviderHTTPError:
     )
 
 
-def _to_gemini_contents(messages: list[Message]) -> tuple[dict | None, list[dict]]:
+def _to_gemini_contents(messages: list[Message]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Split OpenAI-style messages into (systemInstruction, contents)."""
     system: str | None = None
-    contents: list[dict] = []
+    contents: list[dict[str, Any]] = []
     for msg in messages:
         role = msg.get("role", "user")
         text = _content_text(msg.get("content"))
@@ -543,32 +544,32 @@ def _to_gemini_contents(messages: list[Message]) -> tuple[dict | None, list[dict
     return system_instruction, contents
 
 
-def _gemini_generation_config(model: str, max_tokens: int, temperature: float) -> dict:
+def _gemini_generation_config(model: str, max_tokens: int, temperature: float) -> dict[str, Any]:
     """Build the supported Gemini generation config for the selected family.
 
     Gemini 3.6 and 3.7 removed sampling controls such as ``temperature``;
     sending the legacy field makes otherwise valid requests fail.
     """
-    config: dict = {"maxOutputTokens": max_tokens}
+    config: dict[str, Any] = {"maxOutputTokens": max_tokens}
     if not model.startswith(("gemini-3.6-", "gemini-3.7-")):
         config["temperature"] = temperature
     return config
 
 
 def _adapter_openai(
-    provider,
-    model,
-    messages,
+    provider: Any,
+    model: Any,
+    messages: Any,
     *,
-    api_key,
-    env,
-    max_tokens,
-    temperature,
-    timeout,
-    tools,
-    tool_choice,
-    response_format,
-    post,
+    api_key: Any,
+    env: Any,
+    max_tokens: Any,
+    temperature: Any,
+    timeout: Any,
+    tools: Any,
+    tool_choice: Any,
+    response_format: Any,
+    post: Any,
 ) -> Reply:
     return _call_openai(
         provider,
@@ -587,19 +588,19 @@ def _adapter_openai(
 
 
 def _adapter_gemini(
-    provider,
-    model,
-    messages,
+    provider: Any,
+    model: Any,
+    messages: Any,
     *,
-    api_key,
-    env,
-    max_tokens,
-    temperature,
-    timeout,
-    tools,
-    tool_choice,
-    response_format,
-    post,
+    api_key: Any,
+    env: Any,
+    max_tokens: Any,
+    temperature: Any,
+    timeout: Any,
+    tools: Any,
+    tool_choice: Any,
+    response_format: Any,
+    post: Any,
 ) -> Reply:
     # Gemini uses a different tool schema; skip tools for now (the router will
     # fail over to an openai-shape provider that supports them).
@@ -632,7 +633,7 @@ _BUILTIN_ADAPTERS = {
 }
 
 
-def _resolve_adapter(name: str):
+def _resolve_adapter(name: str) -> Any:
     from .plugins import registered_adapters  # lazy: avoids import cycle
 
     custom = registered_adapters()
@@ -651,9 +652,9 @@ def call(
     max_tokens: int = 1024,
     temperature: float = 0.0,
     timeout: float = 90.0,
-    tools: list | None = None,
-    tool_choice=None,
-    response_format=None,
+    tools: list[Any] | None = None,
+    tool_choice: Any = None,
+    response_format: Any = None,
     enforce_thinking_floor: bool = True,
     post: PostFn = default_post,
 ) -> Reply:
@@ -684,11 +685,14 @@ def call(
     # custom adapter does not support it.
     if response_format is not None or adapter in _BUILTIN_ADAPTERS.values():
         kwargs["response_format"] = response_format
-    return adapter(
-        provider,
-        model,
-        messages,
-        **kwargs,
+    return cast(
+        Reply,
+        adapter(
+            provider,
+            model,
+            messages,
+            **kwargs,
+        ),
     )
 
 
@@ -702,9 +706,9 @@ def _call_openai(
     max_tokens: int,
     temperature: float,
     timeout: float,
-    tools: list | None = None,
-    tool_choice=None,
-    response_format=None,
+    tools: list[Any] | None = None,
+    tool_choice: Any = None,
+    response_format: Any = None,
     post: PostFn,
 ) -> Reply:
     base_url = provider.base_url
@@ -798,11 +802,11 @@ def embed(
 
 # A multipart transport: (url, headers, files, data, timeout) -> HTTPResult. Separate from
 # PostFn because audio uploads are multipart/form-data, not a JSON body. Injectable for tests.
-MultipartPostFn = Callable[[str, dict, dict, dict, float], HTTPResult]
+MultipartPostFn = Callable[[str, dict[str, Any], dict[str, Any], dict[str, Any], float], HTTPResult]
 
 
 def default_multipart_post(
-    url: str, headers: dict, files: dict, data: dict, timeout: float
+    url: str, headers: dict[str, Any], files: dict[str, Any], data: dict[str, Any], timeout: float
 ) -> HTTPResult:
     """Real network multipart POST (file upload) via the pooled httpx client. httpx sets the
     multipart Content-Type + boundary from ``files`` itself. Inherits ``follow_redirects=False``
@@ -846,7 +850,7 @@ def default_multipart_post(
 
 
 def _multipart_once(
-    url: str, headers: dict, files: dict, data: dict, timeout: float, deadline: float
+    url: str, headers: dict[str, Any], files: dict[str, Any], data: dict[str, Any], timeout: float, deadline: float
 ) -> HTTPResult:
     with _client().stream(
         "POST", url, headers=headers, files=files, data=data, timeout=_timeout(timeout)
@@ -931,7 +935,7 @@ def _call_gemini(
     headers = {"Content-Type": "application/json"}
     if api_key:  # keyless gemini-shape providers (if any) send no auth header
         headers["x-goog-api-key"] = api_key
-    body: dict = {
+    body: dict[str, Any] = {
         "contents": contents,
         "generationConfig": _gemini_generation_config(model, max_tokens, temperature),
     }
