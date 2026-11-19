@@ -36,6 +36,7 @@ import logging
 import sys
 import threading
 import time
+from typing import Any
 
 from .battle import render_battle_markdown, run_battle
 from .config import resolve_alias, split_provider_model
@@ -428,24 +429,24 @@ TOOLS = [
 ]
 
 
-def _result(mid, result: dict) -> dict:
+def _result(mid: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
-def _error(mid, code: int, message: str) -> dict:
+def _error(mid: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}}
 
 
-def _text(text: str, is_error: bool = False) -> dict:
+def _text(text: str, is_error: bool = False) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "isError": is_error}
 
 
-def _routing_arg(value) -> str | None:
+def _routing_arg(value: Any) -> str | None:
     """Map the tool's routing arg to a pool routing override (auto/unknown -> None)."""
     return routing_override(value)
 
 
-def _messages(system, prompt: str) -> list[dict[str, str]]:
+def _messages(system: Any, prompt: str) -> list[dict[str, str]]:
     msgs: list[dict[str, str]] = []
     if isinstance(system, str) and system.strip():
         msgs.append({"role": "system", "content": system})
@@ -453,18 +454,18 @@ def _messages(system, prompt: str) -> list[dict[str, str]]:
     return msgs
 
 
-def _clamp_int(value, default: int, lo: int, hi: int) -> int:
+def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
     try:
         return max(lo, min(hi, int(value)))
     except (TypeError, ValueError):
         return default
 
 
-def _max_tokens(value, default: int) -> int:
+def _max_tokens(value: Any, default: int) -> int:
     return _clamp_int(value, default, 1, 8192)
 
 
-def _resolve_model(model, env, provider_ids=None) -> tuple[list[str] | None, str | None]:
+def _resolve_model(model: Any, env: Any, provider_ids: Any = None) -> tuple[list[str] | None, str | None]:
     """Resolve a model arg to (providers, model) filters, honoring aliases. Only splits a
     ``provider/model`` prefix when it's a real provider id, so slash-bearing model names
     (HF / OpenRouter / Kilo ids) aren't mis-split."""
@@ -476,7 +477,7 @@ def _resolve_model(model, env, provider_ids=None) -> tuple[list[str] | None, str
     return split_provider_model(model, provider_ids)
 
 
-def _call_tool(pool: Pool, params: dict, notify=None) -> dict:
+def _call_tool(pool: Pool, params: dict[str, Any], notify: Any = None) -> dict[str, Any]:
     name = params.get("name")
     args = params.get("arguments") or {}
     if name == "free_llm_ask":
@@ -509,7 +510,7 @@ def _call_tool(pool: Pool, params: dict, notify=None) -> dict:
     return _text(f"unknown tool: {name}", is_error=True)
 
 
-def _tool_ask(pool: Pool, args: dict) -> dict:
+def _tool_ask(pool: Pool, args: dict[str, Any]) -> dict[str, Any]:
     prompt = args.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         return _text("'prompt' is required", is_error=True)
@@ -536,7 +537,7 @@ def _tool_ask(pool: Pool, args: dict) -> dict:
     return _text(f"{reply.text}\n\n— via {reply.provider_id}/{reply.model} ({tag})")
 
 
-def _tool_panel(pool: Pool, args: dict) -> dict:
+def _tool_panel(pool: Pool, args: dict[str, Any]) -> dict[str, Any]:
     prompt = args.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         return _text("'prompt' is required", is_error=True)
@@ -563,7 +564,7 @@ def _tool_panel(pool: Pool, args: dict) -> dict:
 _tool_second_opinion = _tool_panel
 
 
-def _tool_battle(pool: Pool, args: dict) -> dict:
+def _tool_battle(pool: Pool, args: dict[str, Any]) -> dict[str, Any]:
     prompt = args.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         return _text("'prompt' is required", is_error=True)
@@ -581,7 +582,7 @@ def _tool_battle(pool: Pool, args: dict) -> dict:
     return _text(render_battle_markdown(result))
 
 
-def _tool_recipe(pool: Pool, args: dict) -> dict:
+def _tool_recipe(pool: Pool, args: dict[str, Any]) -> dict[str, Any]:
     name = args.get("name")
     if not isinstance(name, str) or not name.strip():
         return _text("'name' is required", is_error=True)
@@ -666,7 +667,7 @@ def _tool_recipe(pool: Pool, args: dict) -> dict:
     return _text(header + "\n\n" + run.output + footer)
 
 
-def _tool_roles(args: dict) -> dict:
+def _tool_roles(args: dict[str, Any]) -> dict[str, Any]:
     name = args.get("name")
     if isinstance(name, str) and name.strip():
         from .roles import get_role
@@ -691,7 +692,7 @@ def _tool_roles(args: dict) -> dict:
     return _text(format_roles())
 
 
-def _tool_tailnet_info(args: dict) -> dict:
+def _tool_tailnet_info(args: dict[str, Any]) -> dict[str, Any]:
     port = args.get("port")
     if port is None:
         port = 8080
@@ -736,7 +737,7 @@ def _tool_tailnet_info(args: dict) -> dict:
     return _text("\n".join(lines))
 
 
-def _tool_quota_wise(pool: Pool) -> dict:
+def _tool_quota_wise(pool: Pool) -> dict[str, Any]:
     snapshot = pool.quota.snapshot()
     active = current_mode(pool.env) == "wise"
     body = render_quota_wise_status(pool.providers, snapshot, active=active)
@@ -759,7 +760,7 @@ def _tool_quota_wise(pool: Pool) -> dict:
     return _text(body + "\n" + "\n".join(advice))
 
 
-def _tool_tokenmax(pool: Pool, args: dict, notify=None) -> dict:
+def _tool_tokenmax(pool: Pool, args: dict[str, Any], notify: Any = None) -> dict[str, Any]:
     prompt = args.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         return _text("'prompt' is required", is_error=True)
@@ -795,7 +796,7 @@ def _tool_tokenmax(pool: Pool, args: dict, notify=None) -> dict:
     return _text("\n".join(head + body))
 
 
-def _tool_route(pool: Pool, args: dict) -> dict:
+def _tool_route(pool: Pool, args: dict[str, Any]) -> dict[str, Any]:
     from .capability import capability_table, model_capability, prompt_difficulty
 
     prompt = args.get("prompt")
@@ -895,7 +896,7 @@ def _lifetime_summary(pool: Pool) -> str:
     return "\n".join(lines)
 
 
-def _make_notify(params: dict, send_notification):
+def _make_notify(params: dict[str, Any], send_notification: Any) -> Any:
     """Build a progress callback that emits MCP `notifications/progress`, but only
     when the client supplied a progressToken (per the MCP spec) and we have a
     channel to send on. Otherwise return None so the tool runs silently."""
@@ -923,8 +924,8 @@ def _make_notify(params: dict, send_notification):
 
 
 def handle_message(
-    pool: Pool, msg: dict, *, version: str = "0.0.0", send_notification=None
-) -> dict | None:
+    pool: Pool, msg: dict[str, Any], *, version: str = "0.0.0", send_notification: Any = None
+) -> dict[str, Any] | None:
     """Handle one JSON-RPC message. Returns a response dict, or None for
     notifications (which get no reply). `send_notification`, if given, is a
     callback the server can use to emit out-of-band notifications (e.g. progress)
@@ -980,16 +981,16 @@ def serve_stdio(pool: Pool, version: str = "0.0.0") -> None:
     # handle_message() call, or the workers' notifications would deadlock.
     write_lock = threading.Lock()
 
-    def write_obj(obj) -> None:
+    def write_obj(obj: Any) -> None:
         with write_lock:
             out.write(json.dumps(obj) + "\n")
             out.flush()
 
-    def emit(resp) -> None:
+    def emit(resp: Any) -> None:
         if resp is not None:
             write_obj(resp)
 
-    def send_notification(obj) -> None:
+    def send_notification(obj: Any) -> None:
         try:  # best-effort; a failed progress ping must never abort the tool
             write_obj(obj)
         except Exception:  # noqa: BLE001

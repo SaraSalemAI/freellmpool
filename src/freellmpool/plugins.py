@@ -21,13 +21,14 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from typing import Any
 
 from .models import Provider
 from .observe import logger
 
 # Process-global registries. Small and write-rarely; a plain list/dict is fine.
 _PROVIDERS: list[Provider] = []
-_ADAPTERS: dict[str, Callable] = {}
+_ADAPTERS: dict[str, Callable[..., Any]] = {}
 _ENTRYPOINTS_LOADED = False
 _ENTRYPOINT_PROVIDERS: list[Provider] = []
 _ENTRYPOINT_LOCK = threading.Lock()
@@ -40,7 +41,7 @@ def register_provider(provider: Provider) -> None:
     _PROVIDERS.append(provider)
 
 
-def register_adapter(name: str, caller: Callable) -> None:
+def register_adapter(name: str, caller: Callable[..., Any]) -> None:
     """Register a request/response adapter under ``name``.
 
     ``caller`` must accept the same arguments as the built-in ``call`` adapters
@@ -52,7 +53,7 @@ def register_adapter(name: str, caller: Callable) -> None:
     _ADAPTERS[name] = caller
 
 
-def registered_adapters() -> dict[str, Callable]:
+def registered_adapters() -> dict[str, Callable[..., Any]]:
     return dict(_ADAPTERS)
 
 
@@ -75,7 +76,7 @@ def _load_entrypoint_providers() -> list[Provider]:
             try:
                 eps = entry_points(group="freellmpool.providers")
             except TypeError:  # pragma: no cover - <3.10 selection API
-                eps = entry_points().get("freellmpool.providers", [])  # type: ignore[attr-defined]
+                eps = entry_points().get("freellmpool.providers", [])  # type: ignore[attr-defined,arg-type,unused-ignore]
             for ep in eps:
                 try:
                     obj = ep.load()

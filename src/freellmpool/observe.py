@@ -15,12 +15,13 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable, Mapping
+from typing import Any
 
 logger = logging.getLogger("freellmpool")
 
 #: An event hook receives a dict like ``{"event": "success", "target": "groq/...",
 #: "latency_ms": 142.0, "attempts": 1}``. Exceptions raised by a hook are swallowed.
-EventHook = Callable[[dict], None]
+EventHook = Callable[[dict[str, Any]], None]
 
 _LEVELS = {
     "1": logging.INFO,
@@ -53,7 +54,7 @@ def configure_logging_from_env(env: Mapping[str, str] | None = None) -> bool:
     return True
 
 
-def emit(hook: EventHook | None, event: str, **fields) -> None:
+def emit(hook: EventHook | None, event: str, **fields: Any) -> None:
     """Log a structured event and, if present, pass it to the user hook.
 
     Failures in the user hook are isolated — observability must never break a
@@ -71,7 +72,7 @@ def emit(hook: EventHook | None, event: str, **fields) -> None:
             logger.debug("event hook raised", exc_info=True)
 
 
-def _log(event: str, payload: dict) -> None:
+def _log(event: str, payload: dict[str, Any]) -> None:
     detail = " ".join(f"{k}={v}" for k, v in payload.items() if k != "event")
     if event in ("error", "exhausted"):
         logger.info("%s %s", event, detail)

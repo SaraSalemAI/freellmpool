@@ -37,7 +37,7 @@ import os
 import re
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -96,7 +96,7 @@ def _model_ids(pool: Pool, ready_model_ids: frozenset[str] | None = None) -> lis
 
 def _openai_models_payload(
     pool: Pool, ready_model_ids: frozenset[str] | None = None
-) -> dict:
+) -> dict[str, Any]:
     target_lookup = {
         f"{provider.id}/{model.name}": (provider, model.name)
         for provider in pool.providers
@@ -108,7 +108,7 @@ def _openai_models_payload(
     )
     data = []
     for model_id in _model_ids(pool, ready_model_ids):
-        row = {"id": model_id, "object": "model", "owned_by": "freellmpool"}
+        row: dict[str, Any] = {"id": model_id, "object": "model", "owned_by": "freellmpool"}
         target = target_lookup.get(model_id)
         evidence = (
             pool.conformance.evidence(*target, snapshot=conformance_snapshot)
@@ -125,7 +125,7 @@ def _openai_models_payload(
 
 def _anthropic_models_payload(
     pool: Pool, ready_model_ids: frozenset[str] | None = None
-) -> dict:
+) -> dict[str, Any]:
     ids = _model_ids(pool, ready_model_ids)
     if ready_model_ids is None:
         ids.extend(a for a in known_aliases(pool.env) if a.startswith("claude-") and a not in ids)
@@ -207,7 +207,7 @@ def _provider_leaderboard(pool: Pool, limit: int = 5) -> list[tuple[str, float]]
     return [(pid, count / top) for pid, count in ranked if count > 0]
 
 
-def _status_payload(pool: Pool, recent: Sequence[dict], tokenmax: dict | None = None) -> dict:
+def _status_payload(pool: Pool, recent: Sequence[dict[str, Any]], tokenmax: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return a JSON-able status payload for the /status endpoint.
 
     ``recent`` is a snapshot (most-recent-first) of the served-target ring buffer,
@@ -225,7 +225,7 @@ def _status_payload(pool: Pool, recent: Sequence[dict], tokenmax: dict | None = 
         pool.conformance.snapshot() if pool.conformance is not None else None
     )
 
-    def modality_routes(providers) -> list[dict]:
+    def modality_routes(providers: Any) -> list[dict[str, Any]]:
         rows = []
         for provider in providers:
             for model in provider.models:
@@ -379,7 +379,7 @@ def _status_payload(pool: Pool, recent: Sequence[dict], tokenmax: dict | None = 
     }
 
 
-def _routing_and_model(headers, requested: str) -> tuple[str | None, str]:
+def _routing_and_model(headers: Any, requested: str) -> tuple[str | None, str]:
     """Resolve a per-request routing override. A valid mode in the
     ``X-Freellmpool-Routing`` header, or the model name itself being a routing
     keyword (e.g. ``fast``/``quality``), selects that mode and falls back to ``auto``
@@ -399,30 +399,30 @@ def _routing_and_model(headers, requested: str) -> tuple[str | None, str]:
     return override, requested
 
 
-def _task_hint(headers, req: dict) -> object:
+def _task_hint(headers: Any, req: dict[str, Any]) -> Any:
     """Header intent wins over an optional OpenAI-compatible body extension."""
     header = headers.get("X-Freellmpool-Task")
     return header if header is not None else req.get("task")
 
 
-def make_handler(pool: Pool, api_key: str | None = None):
+def make_handler(pool: Pool, api_key: str | None = None) -> Any:
     # Ring buffer of recently-served (provider, model). Appended from worker
     # threads and snapshotted by /status, so guard it: a deque append is atomic,
     # but iterating it (list(recent)) concurrently with an append can raise.
-    recent = collections.deque(maxlen=25)
+    recent: collections.deque[Any] = collections.deque(maxlen=25)
     recent_lock = threading.Lock()
 
-    def record_recent(entry: dict) -> None:
+    def record_recent(entry: dict[str, Any]) -> None:
         with recent_lock:
             recent.appendleft(entry)
 
     # Live tokenmax-swarm progress, surfaced via /status so the OpenCode TUI can throb
     # its rainbow banner while a swarm is in flight. Mutated from a request thread (and
     # its fan-out workers via the progress callback); guard every read/write with the lock.
-    tokenmax_state: dict = {"active": False}
+    tokenmax_state: dict[str, Any] = {"active": False}
     tokenmax_lock = threading.Lock()
 
-    def tokenmax_snapshot() -> dict:
+    def tokenmax_snapshot() -> dict[str, Any]:
         with tokenmax_lock:
             snap = dict(tokenmax_state)
         if snap.get("active") and snap.get("started_at") is not None:
@@ -437,7 +437,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
         timeout = 75
 
         # quiet by default; the server prints its own concise log line
-        def log_message(self, format, *args):  # noqa: A002
+        def log_message(self, format: Any, *args: Any) -> None:  # noqa: A002
             return
 
         def end_headers(self) -> None:
@@ -447,7 +447,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             self._response_started = True
             super().end_headers()
 
-        def _send(self, status: int, payload: dict, headers: dict | None = None) -> None:
+        def _send(self, status: int, payload: dict[str, Any], headers: dict[str, Any] | None = None) -> None:
             data = json.dumps(payload).encode("utf-8")
             try:
                 self.send_response(status)
@@ -465,7 +465,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
         def _error(self, status: int, message: str, code: str = "freellmpool_error") -> None:
             self._send(status, {"error": {"message": message, "type": code}})
 
-        def _anthropic_error(self, status: int, message: str, code: str = "invalid_request_error"):
+        def _anthropic_error(self, status: int, message: str, code: str = "invalid_request_error") -> None:
             # Anthropic's error envelope differs from OpenAI's; Claude-side clients
             # expect {"type":"error","error":{"type":..,"message":..}}.
             self._send(status, {"type": "error", "error": {"type": code, "message": message}})
@@ -685,7 +685,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             else:
                 self._handle_chat(req)
 
-        def _handle_battle(self, req: dict) -> None:
+        def _handle_battle(self, req: dict[str, Any]) -> None:
             from .battle import battle_to_dict, run_battle
 
             prompt = req.get("prompt")
@@ -706,7 +706,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 return
             self._send(200, battle_to_dict(result))
 
-        def _handle_tokenmax(self, req: dict) -> None:
+        def _handle_tokenmax(self, req: dict[str, Any]) -> None:
             """🌈 Fan out to automatically eligible ranked targets and report progress.
 
             The hard cap is 256; ``max_models`` and active routing can narrow the set.
@@ -786,7 +786,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 },
             )
 
-        def _handle_messages(self, req: dict) -> None:
+        def _handle_messages(self, req: dict[str, Any]) -> None:
             """Anthropic Messages API shim — lets Claude Code & friends use free models."""
             if not isinstance(req.get("messages"), list) or not req["messages"]:
                 self._anthropic_error(400, "'messages' must be a non-empty array")
@@ -864,8 +864,8 @@ def make_handler(pool: Pool, api_key: str | None = None):
 
         def _stream_messages_text(
             self,
-            req: dict,
-            chat: dict,
+            req: dict[str, Any],
+            chat: dict[str, Any],
             display_model: str,
             *,
             deadline: float,
@@ -1005,7 +1005,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 )
             return True
 
-        def _handle_embeddings(self, req: dict) -> None:
+        def _handle_embeddings(self, req: dict[str, Any]) -> None:
             data = req.get("input")
             if isinstance(data, str):
                 inputs = [data]
@@ -1116,15 +1116,15 @@ def make_handler(pool: Pool, api_key: str | None = None):
 
         def _resolve(
             self,
-            req: dict,
-            messages: list[dict],
+            req: dict[str, Any],
+            messages: list[dict[str, Any]],
             *,
-            tools=None,
-            tool_choice=None,
-            response_format=None,
+            tools: Any = None,
+            tool_choice: Any = None,
+            response_format: Any = None,
             protocol: str | None = None,
             timeout: float | None = None,
-        ):
+        ) -> Any:
             """Shared: resolve model/params and call the pool. Returns a Reply or
             sends an error response and returns None."""
             requested = req.get("model") or "auto"
@@ -1196,13 +1196,13 @@ def make_handler(pool: Pool, api_key: str | None = None):
 
         def _open_text_stream(
             self,
-            req: dict,
-            messages: list[dict],
+            req: dict[str, Any],
+            messages: list[dict[str, Any]],
             *,
             max_tokens: int | None = None,
             temperature: float | None = None,
             timeout: float | None = None,
-        ):
+        ) -> Any:
             """Select/fail over upstreams before any downstream SSE commit.
 
             ``Pool.stream_chat`` yields provider metadata only after it has obtained
@@ -1259,7 +1259,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 raise
             return gen, meta
 
-        def _text_stream_timeout(self, req: dict) -> float:
+        def _text_stream_timeout(self, req: dict[str, Any]) -> float:
             requested = req.get("model") or "auto"
             requested = requested if isinstance(requested, str) else "auto"
             routing_override, _requested = _routing_and_model(self.headers, requested)
@@ -1277,7 +1277,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
 
-        def _write_named_sse(self, name: str, payload: dict) -> None:
+        def _write_named_sse(self, name: str, payload: dict[str, Any]) -> None:
             block = f"event: {name}\ndata: {json.dumps(payload)}\n\n"
             self.wfile.write(block.encode("utf-8"))
             # BaseHTTPRequestHandler currently uses an unbuffered stream, but an
@@ -1285,7 +1285,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             self.wfile.flush()
 
         @staticmethod
-        def _close_upstream_stream(gen) -> None:
+        def _close_upstream_stream(gen: Any) -> None:
             closer = getattr(gen, "close", None)
             if callable(closer):
                 try:
@@ -1293,7 +1293,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 except Exception:  # noqa: BLE001 - connection cleanup is best-effort
                     pass
 
-        def _handle_chat(self, req: dict) -> None:
+        def _handle_chat(self, req: dict[str, Any]) -> None:
             messages = req.get("messages")
             if not isinstance(messages, list) or not messages:
                 self._error(400, "'messages' must be a non-empty array", "invalid_request_error")
@@ -1333,7 +1333,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             else:
                 self._send(200, _to_openai_response(reply), headers=_obs_headers(reply))
 
-        def _stream_chat(self, req: dict, norm: list[dict]) -> None:
+        def _stream_chat(self, req: dict[str, Any], norm: list[dict[str, Any]]) -> None:
             requested = req.get("model") or "auto"
             if not isinstance(requested, str):
                 self._error(400, "'model' must be a string", "invalid_request_error")
@@ -1464,7 +1464,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 {"provider": provider_id, "model": model_name, "attempts": int(attempts)}
             )
 
-        def _handle_responses(self, req: dict) -> None:
+        def _handle_responses(self, req: dict[str, Any]) -> None:
             """Minimal OpenAI Responses API (/v1/responses) shim for Codex CLI
             and other Responses-based agents."""
             messages = _responses_input_to_messages(req)
@@ -1512,8 +1512,8 @@ def make_handler(pool: Pool, api_key: str | None = None):
 
         def _stream_responses_text(
             self,
-            req: dict,
-            messages: list[dict],
+            req: dict[str, Any],
+            messages: list[dict[str, Any]],
             *,
             deadline: float,
         ) -> bool:
@@ -1552,7 +1552,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
             disconnected = False
             succeeded = False
 
-            def emit(name: str, payload: dict) -> None:
+            def emit(name: str, payload: dict[str, Any]) -> None:
                 nonlocal sequence_number
                 event_payload = {**payload, "sequence_number": sequence_number}
                 sequence_number += 1
@@ -1721,7 +1721,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
                 )
             return True
 
-        def _send_sse(self, sse_blocks) -> None:
+        def _send_sse(self, sse_blocks: Any) -> None:
             """Emit pre-formatted SSE blocks as a stream.
 
             This is intentionally the *buffered* compatibility path: tools,
@@ -1752,7 +1752,7 @@ def make_handler(pool: Pool, api_key: str | None = None):
     return Handler
 
 
-def _parse_model(requested: object, provider_ids: set[str]):
+def _parse_model(requested: object, provider_ids: set[str]) -> Any:
     """Map an OpenAI 'model' field to (provider_filter, model_filter).
 
     "auto"                  -> (None, None)        any provider/model
@@ -1775,7 +1775,7 @@ def _parse_model(requested: object, provider_ids: set[str]):
     return None, requested
 
 
-def _messages_are_text_only(messages: list[dict]) -> bool:
+def _messages_are_text_only(messages: list[dict[str, Any]]) -> bool:
     """Return whether history contains only textual roles/content."""
     for message in messages:
         if message.get("role") == "tool" or message.get("tool_calls"):
@@ -1795,7 +1795,7 @@ def _messages_are_text_only(messages: list[dict]) -> bool:
     return True
 
 
-def _anthropic_text_streamable(req: dict, chat: dict) -> bool:
+def _anthropic_text_streamable(req: dict[str, Any], chat: dict[str, Any]) -> bool:
     """Keep tools and rich Anthropic blocks on buffered structured replay."""
     if chat.get("tools") or chat.get("tool_choice") is not None:
         return False
@@ -1832,7 +1832,7 @@ def _anthropic_text_streamable(req: dict, chat: dict) -> bool:
     return isinstance(messages, list) and bool(messages) and _messages_are_text_only(messages)
 
 
-def _responses_text_streamable(req: dict, messages: list[dict], tools) -> bool:
+def _responses_text_streamable(req: dict[str, Any], messages: list[dict[str, Any]], tools: Any) -> bool:
     """Gate genuine Responses streaming to plain-text request/response shapes."""
     if tools or any(req.get(field) is not None for field in ("include", "reasoning", "modalities")):
         return False
@@ -1850,7 +1850,7 @@ def _responses_text_streamable(req: dict, messages: list[dict], tools) -> bool:
     return _messages_are_text_only(messages)
 
 
-def _content(message: dict) -> str:
+def _content(message: dict[str, Any]) -> str:
     """Flatten OpenAI content (string or array of parts) into plain text."""
     content = message.get("content", "")
     if isinstance(content, str):
@@ -1862,13 +1862,13 @@ def _content(message: dict) -> str:
     return str(content)
 
 
-def _normalize_messages(messages: list) -> list[dict]:
+def _normalize_messages(messages: list[Any]) -> list[dict[str, Any]]:
     """Normalize roles while preserving multimodal and tool-calling content."""
-    out: list[dict] = []
+    out: list[dict[str, Any]] = []
     for m in messages:
         content = m.get("content")
         normalized_content = content if isinstance(content, list) else _content(m)
-        nm: dict = {
+        nm: dict[str, Any] = {
             "role": str(m.get("role", "user")),
             "content": normalized_content,
         }
@@ -1886,7 +1886,7 @@ def _header_safe(value: object) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", "", str(value))
 
 
-def _obs_headers(reply) -> dict:
+def _obs_headers(reply: Any) -> dict[str, Any]:
     return {
         "X-Freellmpool-Provider": _header_safe(reply.provider_id),
         "X-Freellmpool-Model": _header_safe(reply.model),
@@ -1894,7 +1894,7 @@ def _obs_headers(reply) -> dict:
     }
 
 
-def _to_embeddings_response(reply) -> dict:
+def _to_embeddings_response(reply: Any) -> dict[str, Any]:
     return {
         "object": "list",
         "data": [
@@ -1910,14 +1910,14 @@ def _to_embeddings_response(reply) -> dict:
     }
 
 
-def _to_transcription_response(reply) -> dict:
+def _to_transcription_response(reply: Any) -> dict[str, Any]:
     return {
         "text": reply.text,
         "x_freellmpool": {"provider": reply.provider_id, "model": reply.model},
     }
 
 
-def _parse_multipart_form(content_type: str, body: bytes) -> dict:
+def _parse_multipart_form(content_type: str, body: bytes) -> dict[str, Any]:
     """Minimal multipart/form-data parser (stdlib only — ``cgi`` is gone in 3.13).
 
     Returns ``{name: str}`` for text fields and ``{name: (filename, bytes)}`` for file
@@ -1935,7 +1935,7 @@ def _parse_multipart_form(content_type: str, body: bytes) -> dict:
     # "--boundary--", so the LAST segment must begin with "--". Reject truncated/garbled bodies.
     if len(segments) < 2 or not segments[-1].startswith(b"--"):
         raise ValueError("missing closing multipart boundary")
-    out: dict = {}
+    out: dict[str, Any] = {}
     for seg in segments[1:-1]:  # drop the preamble and the trailing closing segment
         seg = seg[2:] if seg.startswith(b"\r\n") else seg  # CRLF terminating the boundary line
         hdr, sep, payload = seg.partition(b"\r\n\r\n")
@@ -1957,7 +1957,7 @@ def _parse_multipart_form(content_type: str, body: bytes) -> dict:
     return out
 
 
-def _to_openai_response(reply) -> dict:
+def _to_openai_response(reply: Any) -> dict[str, Any]:
     message = {"role": "assistant", "content": reply.text or None}
     finish = "stop"
     if reply.message and reply.message.get("tool_calls"):
@@ -1978,7 +1978,7 @@ def _to_openai_response(reply) -> dict:
     }
 
 
-def _dashboard_html(pool) -> str:
+def _dashboard_html(pool: Any) -> str:
     """A self-contained dashboard page (no JS framework, auto-refreshing)."""
     import html as _html
 
@@ -2462,12 +2462,12 @@ def _chunk_block(
     cid: str,
     model_id: str,
     *,
-    role=None,
-    content=None,
-    finish=None,
+    role: Any = None,
+    content: Any = None,
+    finish: Any = None,
     created: int | None = None,
 ) -> str:
-    delta: dict = {}
+    delta: dict[str, Any] = {}
     if role is not None:
         delta["role"] = role
     if content is not None:
@@ -2482,7 +2482,7 @@ def _chunk_block(
     return f"data: {json.dumps(chunk)}\n\n"
 
 
-def _sse_chunks(reply):
+def _sse_chunks(reply: Any) -> Iterator[Any]:
     """Yield OpenAI chat.completion.chunk SSE blocks for a finished reply.
 
     Carries tool_calls (and the ``tool_calls`` finish_reason) when present, so a
@@ -2498,7 +2498,7 @@ def _sse_chunks(reply):
     }
     tool_calls = reply.message.get("tool_calls") if reply.message else None
 
-    def block(chunk):
+    def block(chunk: Any) -> Any:
         return f"data: {json.dumps(chunk)}\n\n"
 
     yield block(
@@ -2528,13 +2528,13 @@ def _sse_chunks(reply):
 # ---- OpenAI Responses API (/v1/responses) shim — for Codex CLI & agents ------
 
 
-def _responses_input_to_messages(req: dict) -> list[dict]:
+def _responses_input_to_messages(req: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert a Responses request (`instructions` + `input`) to chat messages.
 
     `input` may be a plain string or a list of items, each with a `role` and
     `content` that is a string or a list of typed parts ({type, text}).
     """
-    messages: list[dict] = []
+    messages: list[dict[str, Any]] = []
     instructions = req.get("instructions")
     if isinstance(instructions, str) and instructions:
         messages.append({"role": "system", "content": instructions})
@@ -2590,7 +2590,7 @@ def _responses_input_to_messages(req: dict) -> list[dict]:
             role = str(item.get("role", "user"))
             content = item.get("content", "")
             if isinstance(content, list):
-                parts = []
+                parts: list[dict[str, Any]] = []
                 for part in content:
                     if not isinstance(part, dict):
                         continue
@@ -2618,7 +2618,7 @@ def _responses_input_to_messages(req: dict) -> list[dict]:
     return messages
 
 
-def _responses_tools_to_chat(req: dict) -> tuple[list[dict] | None, object | None]:
+def _responses_tools_to_chat(req: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, object | None]:
     """Translate Responses function tools/tool choice to Chat Completions shape."""
 
     raw_tools = req.get("tools")
@@ -2634,11 +2634,12 @@ def _responses_tools_to_chat(req: dict) -> tuple[list[dict] | None, object | Non
             raise ValueError("'tool_choice' requires a non-empty 'tools' array")
         return None, None
 
-    tools: list[dict] = []
+    tools: list[dict[str, Any]] = []
     for tool in raw_tools:
         if not isinstance(tool, dict) or tool.get("type") != "function":
             raise ValueError("only Responses function tools are supported")
-        source = tool.get("function") if isinstance(tool.get("function"), dict) else tool
+        nested = tool.get("function")
+        source: dict[str, Any] = nested if isinstance(nested, dict) else tool
         name = source.get("name")
         if not isinstance(name, str) or not name:
             raise ValueError("each function tool requires a non-empty 'name'")
@@ -2666,10 +2667,9 @@ def _responses_tools_to_chat(req: dict) -> tuple[list[dict] | None, object | Non
         return tools, raw_choice
     if not isinstance(raw_choice, dict) or raw_choice.get("type") != "function":
         raise ValueError("unsupported Responses 'tool_choice'")
-    choice_source = (
-        raw_choice.get("function")
-        if isinstance(raw_choice.get("function"), dict)
-        else raw_choice
+    nested_choice = raw_choice.get("function")
+    choice_source: dict[str, Any] = (
+        nested_choice if isinstance(nested_choice, dict) else raw_choice
     )
     choice_name = choice_source.get("name")
     if not isinstance(choice_name, str) or not choice_name:
@@ -2677,7 +2677,7 @@ def _responses_tools_to_chat(req: dict) -> tuple[list[dict] | None, object | Non
     return tools, {"type": "function", "function": {"name": choice_name}}
 
 
-def _responses_function_call_items(reply) -> list[dict]:
+def _responses_function_call_items(reply: Any) -> list[dict[str, Any]]:
     tool_calls = reply.message.get("tool_calls") if isinstance(reply.message, dict) else None
     if not isinstance(tool_calls, list):
         return []
@@ -2717,7 +2717,7 @@ def _responses_text_item(
     status: str,
     *,
     empty: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     content = []
     if not empty:
         content.append({"type": "output_text", "text": text, "annotations": []})
@@ -2737,8 +2737,8 @@ def _responses_live_text_object(
     *,
     created_at: int,
     status: str,
-    error: dict | None = None,
-) -> dict:
+    error: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the response snapshot carried by live Responses SSE terminals."""
     finished = status == "completed"
     output = []
@@ -2783,7 +2783,7 @@ def _responses_live_text_object(
     }
 
 
-def _to_responses_object(reply) -> dict:
+def _to_responses_object(reply: Any) -> dict[str, Any]:
     rid = f"resp-freellmpool-{reply.provider_id}"
     output = []
     if reply.text:
@@ -2847,12 +2847,12 @@ def _to_responses_object(reply) -> dict:
     }
 
 
-def _responses_sse_events(reply):
+def _responses_sse_events(reply: Any) -> Iterator[Any]:
     """Yield Responses-API SSE blocks (typed events) for a finished reply."""
     obj = _to_responses_object(reply)
     sequence_number = 0
 
-    def event(name, payload):
+    def event(name: Any, payload: Any) -> Any:
         nonlocal sequence_number
         payload = {**payload, "sequence_number": sequence_number}
         sequence_number += 1
@@ -3012,9 +3012,10 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
     Past the cap, new connections get a quick 503 and are dropped."""
 
     daemon_threads = True
+    pool: Any = None
     request_queue_size = _MAX_CONNECTIONS
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._slots = threading.BoundedSemaphore(_MAX_CONNECTIONS)
 
@@ -3026,7 +3027,7 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
         finally:
             super().server_close()
 
-    def process_request(self, request, client_address):
+    def process_request(self, request: Any, client_address: Any) -> None:
         # A client can receive its response just before the worker's ``finally``
         # releases its slot. Give that normal rollover a short grace period so a
         # pool exactly at the advertised cap does not spuriously reject the next
@@ -3048,7 +3049,7 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
             self._slots.release()
             raise
 
-    def process_request_thread(self, request, client_address):
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:

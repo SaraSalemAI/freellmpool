@@ -15,16 +15,18 @@ import atexit
 import contextlib
 import json
 import os
+import sys
 import threading
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 try:
     import fcntl  # POSIX advisory file locks
 except ImportError:  # pragma: no cover - non-POSIX (Windows)
-    fcntl = None
+    fcntl = None  # type: ignore[assignment]
 
 _LIVE_STORES: weakref.WeakSet[QuotaStore] = weakref.WeakSet()
 
@@ -36,6 +38,23 @@ def _reset_live_stores_after_fork() -> None:
 
 if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_live_stores_after_fork)
+
+
+_EXHAUSTED_COUNT = sys.maxsize
+
+
+def _count(value: Any) -> int:
+    """A stored counter as an int; malformed persisted values count as 0.
+
+    A positive overflow (``Infinity`` or ``1e400`` in the JSON) reads as an
+    exhausted counter instead, so corruption never reopens a provider's quota.
+    """
+    try:
+        return int(value)
+    except OverflowError:
+        return _EXHAUSTED_COUNT if value > 0 else 0
+    except (TypeError, ValueError):
+        return 0
 
 
 def _utc_day(now: datetime | None = None) -> str:
@@ -81,7 +100,7 @@ class QuotaStore:
         self._pending_ops = 0
         self._flush_timer: threading.Timer | None = None
         self._reload_after_fork = False
-        self._data: dict = self._load()
+        self._data: dict[str, Any] = self._load()
         _LIVE_STORES.add(self)
         if self.flush_every > 1:
             atexit.register(self.flush)
@@ -99,14 +118,15 @@ class QuotaStore:
             self._data = self._load()
             self._reload_after_fork = False
 
-    def _load(self) -> dict:
+    def _load(self) -> dict[str, Any]:
         try:
             with self.path.open("r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+        except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
             return {}
 
-    def _load_for_write(self) -> dict:
+    def _load_for_write(self) -> dict[str, Any]:
         """Load a writable object, quarantining a present corrupt file first."""
         try:
             with self.path.open("r", encoding="utf-8") as fh:
@@ -123,7 +143,7 @@ class QuotaStore:
         return {}
 
     @contextlib.contextmanager
-    def _file_lock(self):
+    def _file_lock(self) -> Iterator[None]:
         """Cross-process exclusive lock around a read-modify-write of the quota
         file, so a second process (proxy + CLI + MCP all share one file) can't
         clobber another's increments. No-op where flock is unavailable."""
@@ -156,14 +176,14 @@ class QuotaStore:
         finally:
             tmp.unlink(missing_ok=True)
 
-    def _today(self) -> dict:
+    def _today(self) -> dict[str, Any]:
         day = _utc_day(self._clock())
         bucket = self._data.get(day)
-        if bucket is None:
+        if not isinstance(bucket, dict):
             # New UTC day → drop stale buckets to keep the file small.
             self._data = {day: {}}
             bucket = self._data[day]
-        return bucket
+        return cast(dict[str, Any], bucket)
 
     @staticmethod
     def _key(provider_id: str, model: str) -> str:
@@ -172,7 +192,7 @@ class QuotaStore:
     def used(self, provider_id: str, model: str) -> int:
         with self._lock:
             self._prepare_after_fork_locked()
-            return int(self._today().get(self._key(provider_id, model), 0))
+            return _count(self._today().get(self._key(provider_id, model)))
 
     def record(self, provider_id: str, model: str, n: int = 1) -> int:
         with self._lock:
@@ -183,7 +203,7 @@ class QuotaStore:
             day = _utc_day(self._clock())
             bucket = self._today()
             key = self._key(provider_id, model)
-            bucket[key] = int(bucket.get(key, 0)) + n
+            bucket[key] = _count(bucket.get(key)) + n
             self._pending_counts.setdefault(day, {})
             self._pending_counts[day][key] = int(self._pending_counts[day].get(key, 0)) + n
             self._pending_ops += 1
@@ -192,7 +212,7 @@ class QuotaStore:
                 self._flush_locked()
             if self._pending_counts:
                 self._schedule_flush_locked()
-            return count
+            return int(count)
 
     def _record_and_save_locked(self, provider_id: str, model: str, n: int) -> int:
         with self._file_lock():
@@ -201,7 +221,7 @@ class QuotaStore:
             self._data = self._load_for_write()
             bucket = self._today()
             key = self._key(provider_id, model)
-            bucket[key] = int(bucket.get(key, 0)) + n
+            bucket[key] = _count(bucket.get(key)) + n
             count = bucket[key]
             try:
                 self._save()
@@ -209,7 +229,7 @@ class QuotaStore:
                 # Quota is advisory — never let a persistence hiccup abort an
                 # otherwise-successful completion.
                 pass
-            return count
+            return int(count)
 
     def flush(self) -> None:
         """Persist any locally batched quota increments."""
@@ -240,9 +260,11 @@ class QuotaStore:
         with self._file_lock():
             merged = self._load_for_write()
             for day, changes in self._pending_counts.items():
-                bucket = merged.setdefault(day, {})
+                bucket = merged.get(day)
+                if not isinstance(bucket, dict):
+                    bucket = merged[day] = {}
                 for key, amount in changes.items():
-                    bucket[key] = int(bucket.get(key, 0)) + amount
+                    bucket[key] = _count(bucket.get(key)) + amount
             old_data = self._data
             self._data = merged
             try:
@@ -269,8 +291,13 @@ class QuotaStore:
             self._prepare_after_fork_locked()
             current_day = _utc_day(self._clock())
             loaded = self._load()
-            bucket = dict(loaded.get(current_day, {}))
+            raw_bucket = loaded.get(current_day)
+            bucket = (
+                {k: _count(v) for k, v in raw_bucket.items()}
+                if isinstance(raw_bucket, dict)
+                else {}
+            )
             for key, amount in self._pending_counts.get(current_day, {}).items():
-                bucket[key] = int(bucket.get(key, 0)) + amount
+                bucket[key] = _count(bucket.get(key)) + amount
             self._data = {current_day: bucket}
             return bucket

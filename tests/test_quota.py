@@ -302,3 +302,97 @@ def test_immediate_quota_at_fork_registry_does_not_retain_store(tmp_path):
     gc.collect()
 
     assert reference() is None
+
+
+def test_non_object_quota_file_is_treated_as_empty(tmp_path):
+    from freellmpool.quota import QuotaStore
+
+    path = tmp_path / "quota.json"
+    path.write_text("[1, 2, 3]", encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.used("p", "m") == 0
+
+
+def test_oversized_integer_quota_file_is_treated_as_empty(tmp_path):
+    from freellmpool.quota import QuotaStore
+
+    path = tmp_path / "quota.json"
+    path.write_text("1" * 4301, encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.used("p", "m") == 0
+    assert store.snapshot() == {}
+
+
+def test_non_object_day_bucket_is_reset(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    path.write_text(json.dumps({_utc_day(store._clock()): ["bad"]}), encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.used("p", "m") == 0
+
+
+def test_batched_flush_repairs_non_object_day_bucket(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path, flush_every=3)
+    day = _utc_day(store._clock())
+    path.write_text(json.dumps({day: ["bad"]}), encoding="utf-8")
+    store = QuotaStore(path=path, flush_every=3)
+    for _ in range(3):
+        store.record("p", "m")
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved[day] == {store._key("p", "m"): 3}
+
+
+def test_snapshot_treats_non_object_day_bucket_as_empty(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    path.write_text(json.dumps({_utc_day(store._clock()): ["bad"]}), encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.snapshot() == {}
+
+
+@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}, float("-inf"), float("nan")])
+def test_non_numeric_counter_values_are_treated_as_zero(tmp_path, bad):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    day = _utc_day(store._clock())
+    key = store._key("p", "m")
+    path.write_text(json.dumps({day: {key: bad, "other::m": 5}}), encoding="utf-8")
+    store = QuotaStore(path=path, flush_every=100)
+    assert store.used("p", "m") == 0
+    assert store.record("p", "m") == 1
+    snap = store.snapshot()
+    assert snap[key] == 1
+    assert snap["other::m"] == 5
+    assert all(isinstance(v, int) for v in snap.values())
+
+
+def test_positive_infinite_counter_reads_as_exhausted(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    day = _utc_day(store._clock())
+    key = store._key("p", "m")
+    path.write_text(json.dumps({day: {key: float("inf")}}), encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.over_budget("p", "m", rpd=1000)
+    assert store.used("p", "m") > 10**15

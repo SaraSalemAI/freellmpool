@@ -30,14 +30,15 @@ import json
 import os
 import threading
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 try:
     import fcntl  # POSIX advisory file locks
 except ImportError:  # pragma: no cover - non-POSIX (Windows)
-    fcntl = None
+    fcntl = None  # type: ignore[assignment]
 
 # The cumulative counters we persist. Anything else passed to add() is ignored,
 # so a new _bump_stats key can't silently corrupt the file.
@@ -96,7 +97,7 @@ class StatsStore:
         self._pending_first_seen: str | None = None
         self._flush_timer: threading.Timer | None = None
         self._reload_after_fork = False
-        self._data: dict = self._load()
+        self._data: dict[str, Any] = self._load()
         _LIVE_STORES.add(self)
         if self.flush_every > 1:
             atexit.register(self.flush)
@@ -115,7 +116,7 @@ class StatsStore:
             self._data = self._load()
             self._reload_after_fork = False
 
-    def _load(self) -> dict:
+    def _load(self) -> dict[str, Any]:
         """Parsed file as a dict, or {} if missing/unreadable/garbled. Pure: a read
         never mutates the file (so a corrupt file read by snapshot() returns zeros
         without touching disk)."""
@@ -126,7 +127,7 @@ class StatsStore:
         except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
             return {}
 
-    def _load_for_write(self) -> dict:
+    def _load_for_write(self) -> dict[str, Any]:
         """Like _load, but if the file EXISTS yet is corrupt/garbled, quarantine it
         (rename to .corrupt) before returning {} — so the next add() can never
         silently overwrite a present-but-unreadable file and zero the lifetime
@@ -147,7 +148,7 @@ class StatsStore:
         return {}
 
     @contextlib.contextmanager
-    def _file_lock(self):
+    def _file_lock(self) -> Iterator[None]:
         """Cross-process exclusive lock around a read-modify-write, so proxy + CLI +
         MCP sharing one file can't clobber each other. No-op where flock is absent."""
         if fcntl is None:
@@ -247,7 +248,7 @@ class StatsStore:
         if timer is not None:
             timer.cancel()
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """Lifetime counters (+ first_seen), reloaded from disk so a long-running
         proxy reflects increments other processes made. Local pending deltas are
         overlaid in memory; a read never forces an fsync."""
@@ -257,7 +258,7 @@ class StatsStore:
             for key, value in self._pending.items():
                 loaded[key] = int(loaded.get(key, 0)) + value
             self._data = loaded
-            out: dict = {k: int(loaded.get(k, 0)) for k in _FIELDS}
+            out: dict[str, Any] = {k: int(loaded.get(k, 0)) for k in _FIELDS}
             out["first_seen"] = loaded.get("first_seen") or self._pending_first_seen
             return out
 

@@ -8,6 +8,8 @@ snapshot) so rendering stays decoupled from routing.
 
 from __future__ import annotations
 
+from typing import Any
+
 from . import savings
 
 _BRAND = "#7c3aed"  # freellmpool purple
@@ -46,11 +48,11 @@ def _money(usd: object) -> str:
     return f"${v:,.2f}" if v >= 1 else f"${v:.4f}"
 
 
-def _tokens(stats: dict) -> int:
+def _tokens(stats: dict[str, Any]) -> int:
     return int(stats.get("prompt_tokens", 0) or 0) + int(stats.get("completion_tokens", 0) or 0)
 
 
-def _saved(stats: dict) -> float:
+def _saved(stats: dict[str, Any]) -> float:
     return savings.usd_saved(stats.get("prompt_tokens"), stats.get("completion_tokens"))
 
 
@@ -92,7 +94,7 @@ def _flat_badge(label: str, value: str, color: str) -> str:
     )
 
 
-def badge_svg(stats: dict, *, label: str = "freellmpool", metric: str = "tokens") -> str:
+def badge_svg(stats: dict[str, Any], *, label: str = "freellmpool", metric: str = "tokens") -> str:
     """A small embeddable badge. ``metric``: tokens | saved | requests."""
     if metric == "saved":
         value, color = f"est. {_money(_saved(stats))} saved", _GREEN
@@ -103,7 +105,7 @@ def badge_svg(stats: dict, *, label: str = "freellmpool", metric: str = "tokens"
     return _flat_badge(label, value, color)
 
 
-def summary_svg(stats: dict, leaderboard: list[tuple[str, float]] | None = None) -> str:
+def summary_svg(stats: dict[str, Any], leaderboard: list[tuple[str, float]] | None = None) -> str:
     """A larger shareable card: estimated cost avoided, tokens served free, requests, the
     'serving free since' date, and an optional provider leaderboard (name, 0..1)."""
     lb = leaderboard or []
