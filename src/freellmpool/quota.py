@@ -15,6 +15,7 @@ import atexit
 import contextlib
 import json
 import os
+import sys
 import threading
 import weakref
 from collections.abc import Callable, Iterator
@@ -39,11 +40,20 @@ if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_live_stores_after_fork)
 
 
+_EXHAUSTED_COUNT = sys.maxsize
+
+
 def _count(value: Any) -> int:
-    """A stored counter as an int; malformed persisted values count as 0."""
+    """A stored counter as an int; malformed persisted values count as 0.
+
+    A positive overflow (``Infinity`` or ``1e400`` in the JSON) reads as an
+    exhausted counter instead, so corruption never reopens a provider's quota.
+    """
     try:
         return int(value)
-    except (TypeError, ValueError, OverflowError):
+    except OverflowError:
+        return _EXHAUSTED_COUNT if value > 0 else 0
+    except (TypeError, ValueError):
         return 0
 
 

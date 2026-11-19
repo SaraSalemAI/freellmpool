@@ -353,7 +353,7 @@ def test_snapshot_treats_non_object_day_bucket_as_empty(tmp_path):
     assert store.snapshot() == {}
 
 
-@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}, float("inf"), float("-inf"), float("nan")])
+@pytest.mark.parametrize("bad", ["x", None, [1], {"a": 1}, float("-inf"), float("nan")])
 def test_non_numeric_counter_values_are_treated_as_zero(tmp_path, bad):
     import json
 
@@ -371,3 +371,18 @@ def test_non_numeric_counter_values_are_treated_as_zero(tmp_path, bad):
     assert snap[key] == 1
     assert snap["other::m"] == 5
     assert all(isinstance(v, int) for v in snap.values())
+
+
+def test_positive_infinite_counter_reads_as_exhausted(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    day = _utc_day(store._clock())
+    key = store._key("p", "m")
+    path.write_text(json.dumps({day: {key: float("inf")}}), encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.over_budget("p", "m", rpd=1000)
+    assert store.used("p", "m") > 10**15
