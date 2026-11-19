@@ -339,3 +339,15 @@ def test_batched_flush_repairs_non_object_day_bucket(tmp_path):
         store.record("p", "m")
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved[day] == {store._key("p", "m"): 3}
+
+
+def test_snapshot_treats_non_object_day_bucket_as_empty(tmp_path):
+    import json
+
+    from freellmpool.quota import QuotaStore, _utc_day
+
+    path = tmp_path / "quota.json"
+    store = QuotaStore(path=path)
+    path.write_text(json.dumps({_utc_day(store._clock()): ["bad"]}), encoding="utf-8")
+    store = QuotaStore(path=path)
+    assert store.snapshot() == {}

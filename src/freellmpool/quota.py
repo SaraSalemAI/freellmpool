@@ -273,7 +273,8 @@ class QuotaStore:
             self._prepare_after_fork_locked()
             current_day = _utc_day(self._clock())
             loaded = self._load()
-            bucket = dict(loaded.get(current_day, {}))
+            raw_bucket = loaded.get(current_day)
+            bucket = dict(raw_bucket) if isinstance(raw_bucket, dict) else {}
             for key, amount in self._pending_counts.get(current_day, {}).items():
                 bucket[key] = int(bucket.get(key, 0)) + amount
             self._data = {current_day: bucket}
