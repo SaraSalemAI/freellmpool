@@ -14,6 +14,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 from . import __version__
 from .config import (
@@ -65,7 +66,7 @@ def _read_stdin() -> str:
     return sys.stdin.read()
 
 
-def _runtime_catalog():
+def _runtime_catalog() -> Any:
     """Built-in plus registered/entry-point providers, merged by provider id."""
 
     from .plugins import registered_providers
@@ -117,7 +118,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         system = f"{system}\n{json_rule}" if system else json_rule
 
     pool = Pool.from_default_config()
-    pool_env = getattr(pool, "env", os.environ)
+    pool_env = cast("dict[str, str]", getattr(pool, "env", os.environ))
     mode_settings = settings(pool_env)
     has_routing_config = bool(pool_env.get("FREELLMPOOL_ROUTING") or mode_settings.get("routing"))
     wise = is_wise_enabled(pool_env, override=args.mode, settings=mode_settings)
@@ -260,7 +261,7 @@ def cmd_tokenmax(args: argparse.Namespace) -> int:
         msgs.append({"role": "system", "content": args.system})
     msgs.append({"role": "user", "content": prompt})
 
-    pool_env = getattr(pool, "env", os.environ)
+    pool_env = cast("dict[str, str]", getattr(pool, "env", os.environ))
     mode_settings = settings(pool_env)
     has_routing_config = bool(pool_env.get("FREELLMPOOL_ROUTING") or mode_settings.get("routing"))
     wise = is_wise_enabled(pool_env, override=args.mode, settings=mode_settings)
@@ -572,7 +573,7 @@ def cmd_badge(args: argparse.Namespace) -> int:
     return 0
 
 
-def _format_capacity_row(row) -> str:
+def _format_capacity_row(row: Any) -> str:
     quota = "?" if row.quota_hint <= 0 else str(row.quota_hint)
     key = "keyless" if row.keyless else (row.key_env or "-")
     expiry = f" expires={row.expires_at}" if row.expires_at else ""
@@ -614,7 +615,7 @@ def cmd_keys_checklist(args: argparse.Namespace) -> int:
     return 0
 
 
-def _choose_provider(catalog, provider_id: str | None):
+def _choose_provider(catalog: Any, provider_id: str | None) -> Any:
     providers = [p for p in catalog if p.key_env]
     if provider_id:
         needle = provider_id.lower()
@@ -647,7 +648,7 @@ def _yes(raw: str) -> bool:
     return raw.strip().lower() in {"y", "yes"}
 
 
-def _load_or_sync_external_catalog():
+def _load_or_sync_external_catalog() -> Any:
     from .catalog import load_external_catalog, sync_external_catalog
 
     external = load_external_catalog()
@@ -724,7 +725,7 @@ def _import_or_create_provider(provider_name: str, args: argparse.Namespace) -> 
         if not model and not args.yes:
             model = input("Default model id: ").strip()
     try:
-        local_id = create_user_provider_stub(name=provider_name, base_url=base_url, model=model)
+        local_id = create_user_provider_stub(name=provider_name, base_url=base_url, model=model or "")
     except ValueError as exc:
         print(f"Could not create provider: {exc}", file=sys.stderr)
         return None
@@ -840,7 +841,7 @@ def cmd_capacity_status(args: argparse.Namespace) -> int:
     from .catalog import load_external_catalog, match_local_provider, sync_external_catalog
     from .key_inventory import load_inventory
 
-    external = []
+    external: list[Any] = []
     cache_note = None
     if args.refresh:
         try:
@@ -1114,7 +1115,7 @@ def cmd_conformance_run(args: argparse.Namespace) -> int:
         )
         return 2
     configured = configured_providers(catalog, env)
-    targets = []
+    targets: list[tuple[Any, str]] = []
     if args.include_disabled:
         if not args.provider or not args.model or args.providers or args.all_models:
             print(
@@ -1167,24 +1168,24 @@ def cmd_conformance_run(args: argparse.Namespace) -> int:
         return 3
 
     store = ConformanceStore()
-    rows = []
-    for provider, model in targets:
+    rows: list[dict[str, Any]] = []
+    for target_provider, target_model in targets:
         results = run_target_canaries(
-            provider,
-            model,
+            target_provider,
+            target_model,
             env=env,
             features=features,
             timeout=args.timeout,
         )
         for feature, result in results.items():
             store.record(
-                provider,
-                model,
+                target_provider,
+                target_model,
                 feature,
                 status=result["status"],
                 classification=result["classification"],
             )
-        rows.append({"provider": provider.id, "model": model, "features": results})
+        rows.append({"provider": target_provider.id, "model": target_model, "features": results})
     if args.json:
         print(json.dumps(rows, separators=(",", ":"), sort_keys=True))
     else:
@@ -1195,7 +1196,7 @@ def cmd_conformance_run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _conformance_env(catalog) -> dict[str, str]:
+def _conformance_env(catalog: Any) -> dict[str, str]:
     """Merge a bounded workflow secret map, restricted to catalog-declared names."""
 
     import json
@@ -1251,7 +1252,7 @@ def cmd_conformance_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _in_table(name: str, table) -> bool:
+def _in_table(name: str, table: Any) -> bool:
     from .capability import normalize_model_name
 
     return normalize_model_name(name) in table
@@ -1503,7 +1504,7 @@ def _run_tailnet_serve(
         or None
     )
 
-    bind_host = status.ipv4  # type: ignore[assignment]  # safe: usable=True
+    bind_host = cast(str, status.ipv4)  # safe: usable=True
 
     # Non-Tailnet LAN binds need --allow-lan; even Tailnet binds need
     # auth unless --allow-no-auth is passed. assert_bind_safe enforces
@@ -1809,7 +1810,7 @@ def cmd_playground(args: argparse.Namespace) -> int:
     import urllib.request
 
     class _NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
+        def redirect_request(self, req: Any, fp: Any, code: Any, msg: Any, headers: Any, newurl: Any) -> Any:
             return None
 
     base = f"http://127.0.0.1:{args.port}"
@@ -2915,7 +2916,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        return args.func(args)
+        return cast(int, args.func(args))
     except (EOFError, KeyboardInterrupt):
         # No input on a non-TTY/piped stdin (or Ctrl-D/Ctrl-C at a prompt) —
         # exit cleanly instead of dumping a traceback.

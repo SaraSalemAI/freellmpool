@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
 from . import client as _client
 from .capability import prompt_difficulty
@@ -51,10 +52,10 @@ from .routing_modes import normalize_routing_mode
 from .task_quality import TASK_GENERAL, resolve_task, validate_task
 
 #: An async transport: ``await apost(url, headers, json_body, timeout) -> HTTPResult``.
-AsyncPostFn = Callable[[str, dict, dict, float], Awaitable["_client.HTTPResult"]]
+AsyncPostFn = Callable[[str, dict[str, Any], dict[str, Any], float], Awaitable["_client.HTTPResult"]]
 
 
-async def _aread_capped_response(chunks, deadline: float, timeout: float) -> tuple[bytes, str]:
+async def _aread_capped_response(chunks: Any, deadline: float, timeout: float) -> tuple[bytes, str]:
     out: list[bytes] = []
     total = 0
     loop = asyncio.get_running_loop()
@@ -83,12 +84,12 @@ class AsyncPool:
     def __init__(self, pool: Pool, *, apost: AsyncPostFn | None = None):
         self._pool = pool
         self._apost_fn = apost
-        self._aclient = None  # lazy httpx.AsyncClient
-        self._aclient_loop = None  # the loop the client is bound to
+        self._aclient: Any = None  # lazy httpx.AsyncClient
+        self._aclient_loop: asyncio.AbstractEventLoop | None = None  # the loop the client is bound to
         self._aclient_lock = asyncio.Lock()  # serialize lazy create/close
 
     @classmethod
-    def from_default_config(cls, **kwargs) -> AsyncPool:
+    def from_default_config(cls, **kwargs: Any) -> AsyncPool:
         return cls(Pool.from_default_config(**kwargs))
 
     # ---- expose the underlying pool's config -------------------------
@@ -97,7 +98,7 @@ class AsyncPool:
         return self._pool.providers
 
     @property
-    def metrics(self):
+    def metrics(self) -> Any:
         return self._pool.metrics
 
     @property
@@ -105,15 +106,15 @@ class AsyncPool:
         return self._pool.env
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         return self._pool.stats
 
     @property
-    def quota(self):
+    def quota(self) -> Any:
         return self._pool.quota
 
     # ---- client lifecycle --------------------------------------------
-    async def _client_obj(self):
+    async def _client_obj(self) -> Any:
         import httpx
 
         running = asyncio.get_running_loop()
@@ -153,18 +154,18 @@ class AsyncPool:
     async def __aenter__(self) -> AsyncPool:
         return self
 
-    async def __aexit__(self, *exc) -> None:
+    async def __aexit__(self, *exc: Any) -> None:
         await self.aclose()
 
     async def _apost(
         self,
         url: str,
-        headers: dict,
-        body: dict,
+        headers: dict[str, Any],
+        body: dict[str, Any],
         timeout: float,
         *,
         max_attempts: int | None = None,
-    ):
+    ) -> Any:
         if self._apost_fn is not None:
             return await self._apost_fn(url, headers, body, timeout)
         import httpx
@@ -227,14 +228,14 @@ class AsyncPool:
         self,
         provider: Provider,
         model: str,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         *,
         max_tokens: int,
         temperature: float,
         timeout: float,
-        tools,
-        tool_choice,
-        response_format,
+        tools: Any,
+        tool_choice: Any,
+        response_format: Any,
         max_transport_attempts: int | None = None,
     ) -> Reply:
         if _is_thinking(model) and max_tokens < _THINKING_FLOOR:
@@ -303,18 +304,18 @@ class AsyncPool:
 
     async def _acall_openai(
         self,
-        provider,
-        model,
-        messages,
+        provider: Any,
+        model: Any,
+        messages: Any,
         *,
-        api_key,
-        max_tokens,
-        temperature,
-        timeout,
-        tools,
-        tool_choice,
-        response_format,
-        max_transport_attempts,
+        api_key: Any,
+        max_tokens: Any,
+        temperature: Any,
+        timeout: Any,
+        tools: Any,
+        tool_choice: Any,
+        response_format: Any,
+        max_transport_attempts: Any,
     ) -> Reply:
         base_url = provider.base_url
         if provider.adapter == "cloudflare":
@@ -363,20 +364,20 @@ class AsyncPool:
 
     async def _acall_gemini(
         self,
-        provider,
-        model,
-        messages,
+        provider: Any,
+        model: Any,
+        messages: Any,
         *,
-        api_key,
-        max_tokens,
-        temperature,
-        timeout,
-        max_transport_attempts=None,
+        api_key: Any,
+        max_tokens: Any,
+        temperature: Any,
+        timeout: Any,
+        max_transport_attempts: Any = None,
     ) -> Reply:
         system_instruction, contents = _to_gemini_contents(messages)
         url = f"{provider.base_url}/models/{model}:generateContent"
         headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
-        body: dict = {
+        body: dict[str, Any] = {
             "contents": contents,
             "generationConfig": _gemini_generation_config(model, max_tokens, temperature),
         }
@@ -407,8 +408,8 @@ class AsyncPool:
         )
 
     # ---- entrypoints --------------------------------------------------
-    async def aask(self, prompt: str, *, system: str | None = None, **kwargs) -> Reply:
-        messages: list[dict] = []
+    async def aask(self, prompt: str, *, system: str | None = None, **kwargs: Any) -> Reply:
+        messages: list[dict[str, Any]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
@@ -416,16 +417,16 @@ class AsyncPool:
 
     async def achat(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         *,
         model: str | None = None,
         providers: Iterable[str] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.0,
         timeout: float = 90.0,
-        tools: list | None = None,
-        tool_choice=None,
-        response_format=None,
+        tools: list[Any] | None = None,
+        tool_choice: Any = None,
+        response_format: Any = None,
         protocol: str | None = None,
         routing: str | None = None,
         task: str | None = None,

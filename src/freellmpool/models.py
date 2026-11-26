@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -71,11 +72,11 @@ class Reply:
     text: str
     provider_id: str
     model: str
-    raw: dict
+    raw: dict[str, Any]
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     attempts: int = 1  # how many providers were tried before this one succeeded
-    message: dict | None = None  # raw assistant message (carries tool_calls, etc.)
+    message: dict[str, Any] | None = None  # raw assistant message (carries tool_calls, etc.)
     cached: bool = False  # True if served from the response cache
 
     def __str__(self) -> str:  # pragma: no cover - convenience
@@ -99,5 +100,5 @@ class TranscribeReply:
     text: str
     provider_id: str
     model: str
-    raw: dict
+    raw: dict[str, Any]
     prompt_tokens: int | None = None

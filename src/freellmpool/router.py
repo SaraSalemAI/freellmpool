@@ -12,7 +12,7 @@ import os
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -319,7 +319,7 @@ class Pool:
         if self._stats_store is not None:
             self._stats_store.add(**deltas)
 
-    def stats_snapshot(self) -> dict:
+    def stats_snapshot(self) -> dict[str, Any]:
         """A consistent copy of the session stats counters, read under the lock so
         readers (/status, MCP, CLI) never see a torn requests/tokens pair."""
         with self._stats_lock:
@@ -332,7 +332,7 @@ class Pool:
             if callable(flush):
                 flush()
 
-    def _chat_post_once(self, url: str, headers: dict, body: dict, timeout: float):
+    def _chat_post_once(self, url: str, headers: dict[str, Any], body: dict[str, Any], timeout: float) -> Any:
         """Use one built-in transport attempt while preserving injected post APIs."""
         if self._post is default_post:
             return default_post(url, headers, body, timeout, max_attempts=1)
@@ -355,14 +355,14 @@ class Pool:
                 result[provider_id] = max(result.get(provider_id, 0.0), remaining)
         return result
 
-    def lifetime_stats(self) -> dict:
+    def lifetime_stats(self) -> dict[str, Any]:
         """Persistent lifetime totals (+ first_seen), or the in-memory session
         totals if no persistent store is wired."""
         if self._stats_store is not None:
             return self._stats_store.snapshot()
         return {**self.stats_snapshot(), "first_seen": None}
 
-    def route_health_snapshot(self):
+    def route_health_snapshot(self) -> Any:
         """Persistent health rows for status surfaces, or an empty mapping."""
         return self.route_health.snapshot() if self.route_health is not None else {}
 
@@ -370,7 +370,7 @@ class Pool:
         """Persistent per-model circuit reset times for readiness surfaces."""
         return self.route_health.route_cooldowns() if self.route_health is not None else {}
 
-    def conformance_snapshot(self) -> dict:
+    def conformance_snapshot(self) -> dict[str, Any]:
         """Sanitized per-model protocol evidence for status/model surfaces."""
 
         return self.conformance.snapshot() if self.conformance is not None else {
@@ -839,10 +839,10 @@ class Pool:
         def over_of(t: Target) -> int:
             return 1 if (t.rpd > 0 and used_of(t) >= t.rpd) else 0
 
-        def stat_of(t: Target):
+        def stat_of(t: Target) -> Any:
             return msnap.get(t.name)
 
-        def health_of(t: Target):
+        def health_of(t: Target) -> Any:
             return hsnap.get(t.name)
 
         def failing_of(t: Target) -> bool:
@@ -915,7 +915,7 @@ class Pool:
                     latency = health.ewma_ms if health is not None else None
                 if latency is None:
                     return _QUALITY_UNKNOWN_LAT
-                return min(latency / 1000.0, _QUALITY_SLOW_S) / _QUALITY_SLOW_S
+                return float(min(latency / 1000.0, _QUALITY_SLOW_S) / _QUALITY_SLOW_S)
 
             def quality_key(t: Target) -> tuple[int, int, float, int]:
                 # over-budget, then known-failing sink to the back (still reachable);
@@ -983,7 +983,7 @@ class Pool:
                 return (1 if stats.all_over else 0, stats.best_score, stats.used)
 
             provider_order = sorted(by_provider, key=provider_fast_key)
-            target_key = target_fast_key
+            target_key: Callable[[Target], tuple[Any, ...]] = target_fast_key
         elif mode == "spread":
 
             def provider_spread_key(provider_id: str) -> tuple[int, int, int, float]:
@@ -1029,8 +1029,8 @@ class Pool:
         max_tokens: int = 1024,
         temperature: float = 0.0,
         timeout: float = 90.0,
-        tools: list | None = None,
-        tool_choice=None,
+        tools: list[Any] | None = None,
+        tool_choice: Any = None,
         routing: str | None = None,
         task: str | None = None,
     ) -> Reply:
@@ -1067,9 +1067,9 @@ class Pool:
         max_tokens: int = 1024,
         temperature: float = 0.0,
         timeout: float = 90.0,
-        tools: list | None = None,
-        tool_choice=None,
-        response_format=None,
+        tools: list[Any] | None = None,
+        tool_choice: Any = None,
+        response_format: Any = None,
         protocol: str | None = None,
         routing: str | None = None,
         task: str | None = None,
@@ -1414,7 +1414,7 @@ class Pool:
         timeout: float = 90.0,
         routing: str | None = None,
         task: str | None = None,
-    ):
+    ) -> Generator[Any, None, None]:
         """Stream content deltas with token-level streaming.
 
         Yields a meta dict ``{"provider", "model"}`` first, then content-delta

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 # Phrases that mark a 400/413 as a *context-window* overflow specifically — kept
 # narrow so unrelated 400s ("tool description too long", "image url too long",
@@ -33,7 +34,7 @@ _LIMIT_RE = re.compile(r"context\s+(?:length|window)[^.\d]*?(\d[\d,]+)\s*token",
 _TOKENS_PER_CHAR = 0.25  # ~4 chars/token; see module docstring on why this is rough
 
 
-def estimate_input_tokens(messages, tools=None) -> int:
+def estimate_input_tokens(messages: Any, tools: Any = None) -> int:
     """A rough token estimate of a request's input (messages + any tools).
 
     Counts string ``content`` and the text parts of multimodal content, plus any

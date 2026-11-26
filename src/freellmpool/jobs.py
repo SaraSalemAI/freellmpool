@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:
     import fcntl  # POSIX advisory file locks
@@ -808,7 +808,7 @@ def _execute_ask_job(job: Job, *, pool_factory: Callable[[], Any]) -> Reply:
         temperature=job.spec.get("temperature", 0.0),
         timeout=float(job.spec.get("timeout", 90.0)),
     )
-    return reply
+    return cast(Reply, reply)
 
 
 def _safe_error(exc: BaseException) -> str:

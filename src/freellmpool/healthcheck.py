@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from .benchmark import benchmark
 from .router import Pool
@@ -19,7 +20,7 @@ class HealthRow:
 
 
 def run_healthcheck(
-    pool: Pool, *, model: str | None = None, providers=None, timeout: float = 20.0
+    pool: Pool, *, model: str | None = None, providers: Any = None, timeout: float = 20.0
 ) -> list[HealthRow]:
     rows = benchmark(pool, model=model, providers=providers, timeout=timeout, max_tokens=8)
     out: list[HealthRow] = []

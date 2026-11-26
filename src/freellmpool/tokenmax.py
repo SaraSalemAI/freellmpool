@@ -20,6 +20,7 @@ import itertools
 import sys
 import threading
 from collections.abc import Callable
+from typing import Any
 
 from .router import Pool
 
@@ -69,7 +70,7 @@ class RainbowThrob:
             sys.stderr.write(f"\r\033[38;5;{c}m{p} 🌈 {self.label} {p}\033[0m\033[K")
             sys.stderr.flush()
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: Any) -> None:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=1.0)
@@ -82,11 +83,11 @@ class RainbowThrob:
 
 def select_targets(
     pool: Pool,
-    messages: list[dict],
-    max_models=None,
+    messages: list[dict[str, Any]],
+    max_models: Any = None,
     *,
     routing: str | None = None,
-) -> tuple[list, int]:
+) -> tuple[list[Any], int]:
     """Pick automatically eligible ranked targets across configured providers.
 
     Targets from :meth:`Pool.rank_targets` are interleaved round-robin by provider
@@ -97,7 +98,7 @@ def select_targets(
     Returns ``(picks, n_providers)``. ``max_models`` can only lower the count; the
     automatically eligible set is always capped at :data:`HARD_CAP` (256).
     """
-    by_provider: dict[str, list] = {}
+    by_provider: dict[str, list[Any]] = {}
     for t in pool.rank_targets(messages, routing=routing):
         by_provider.setdefault(t.provider.id, []).append(t)
     interleaved = [t for tier in itertools.zip_longest(*by_provider.values()) for t in tier if t]
@@ -116,8 +117,8 @@ def select_targets(
 
 def fan_out(
     pool: Pool,
-    messages: list[dict],
-    picks: list,
+    messages: list[dict[str, Any]],
+    picks: list[Any],
     *,
     max_tokens: int,
     timeout: float = 90.0,
@@ -133,7 +134,7 @@ def fan_out(
     counter = itertools.count(1)
     lock = threading.Lock()
 
-    def ask_one(t):
+    def ask_one(t: Any) -> Any:
         try:
             r = pool.chat(
                 messages,
@@ -142,7 +143,7 @@ def fan_out(
                 max_tokens=max_tokens,
                 timeout=timeout,
             )
-            out = (f"{r.provider_id}/{r.model}", r.text, None)
+            out: tuple[str, str | None, str | None] = (f"{r.provider_id}/{r.model}", r.text, None)
         except Exception as exc:  # noqa: BLE001 — one model failing must not abort the swarm
             out = (f"{t.provider.id}/{t.model}", None, f"{type(exc).__name__}: {exc}")
         if progress is not None:

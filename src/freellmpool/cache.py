@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
+from typing import Any, cast
 
 
 def default_cache_path() -> Path:
@@ -65,17 +66,17 @@ class Cache:
 
     @staticmethod
     def make_key(
-        messages,
-        model,
-        providers,
-        max_tokens,
-        temperature,
-        tools,
-        tool_choice=None,
-        routing=None,
-        response_format=None,
-        protocol=None,
-        task=None,
+        messages: Any,
+        model: Any,
+        providers: Any,
+        max_tokens: Any,
+        temperature: Any,
+        tools: Any,
+        tool_choice: Any = None,
+        routing: Any = None,
+        response_format: Any = None,
+        protocol: Any = None,
+        task: Any = None,
     ) -> str | None:
         try:
             payload = json.dumps(
@@ -104,7 +105,7 @@ class Cache:
             return None
         return hashlib.sha256(payload.encode()).hexdigest()
 
-    def get(self, key: str | None) -> dict | None:
+    def get(self, key: str | None) -> dict[str, Any] | None:
         if not key:
             return None
         cutoff = self._clock() - self.ttl
@@ -118,11 +119,11 @@ class Cache:
         if not row or row[1] < cutoff:
             return None
         try:
-            return json.loads(row[0])
+            return cast(dict[str, Any], json.loads(row[0]))
         except (json.JSONDecodeError, ValueError):
             return None
 
-    def put(self, key: str | None, value: dict) -> None:
+    def put(self, key: str | None, value: dict[str, Any]) -> None:
         if not key:
             return
         try:

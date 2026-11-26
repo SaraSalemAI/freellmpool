@@ -69,8 +69,8 @@ jobs:
         run: python scripts/check_release_ready.py --skip-build
       - name: Proxy stress smoke
         run: python scripts/stress_proxy.py --profile ci
-      - name: Type check focused helpers
-        run: mypy --follow-imports=skip src/freellmpool/routing_modes.py src/freellmpool/catalog_validation.py src/freellmpool/_version.py src/freellmpool/readiness.py
+      - name: Type check (strict, whole package)
+        run: mypy src/freellmpool
       - name: Import smoke
         run: python -c "import freellmpool; from freellmpool import Pool, AsyncPool; print(freellmpool.__version__, Pool, AsyncPool)"
       - name: Test

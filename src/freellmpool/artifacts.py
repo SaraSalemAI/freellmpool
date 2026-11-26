@@ -7,7 +7,7 @@ import json
 import os
 import re
 import threading
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +16,7 @@ from typing import Any
 try:
     import fcntl  # POSIX advisory file locks
 except ImportError:  # pragma: no cover - non-POSIX (Windows)
-    fcntl = None
+    fcntl = None  # type: ignore[assignment]
 
 RUN_RECORD_SCHEMA_VERSION = "1.0.0"
 RUN_RECORD_KINDS = frozenset({"ask", "second-opinion", "battle", "recipe", "job"})
@@ -226,7 +226,7 @@ class RunRecordStore:
             fh.write("\n")
 
     @contextlib.contextmanager
-    def _file_lock(self):
+    def _file_lock(self) -> Iterator[None]:
         if fcntl is None:
             yield
             return

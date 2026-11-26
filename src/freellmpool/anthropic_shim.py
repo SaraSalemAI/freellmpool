@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from typing import Any
 
 
-def _flatten_text(blocks) -> str:
+def _flatten_text(blocks: Any) -> str:
     if isinstance(blocks, str):
         return blocks
     if isinstance(blocks, list):
@@ -27,23 +28,23 @@ def _flatten_text(blocks) -> str:
     return ""
 
 
-def _safe_int(value, default: int) -> int:
+def _safe_int(value: Any, default: int) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
 
 
-def _safe_float(value, default: float) -> float:
+def _safe_float(value: Any, default: float) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
 
 
-def request_to_chat(body: dict) -> dict:
+def request_to_chat(body: dict[str, Any]) -> dict[str, Any]:
     """Anthropic Messages request -> kwargs for Pool.chat()."""
-    messages: list[dict] = []
+    messages: list[dict[str, Any]] = []
 
     system = body.get("system")
     sys_text = _flatten_text(system) if system else ""
@@ -61,8 +62,8 @@ def request_to_chat(body: dict) -> dict:
         if not isinstance(content, list):
             continue
         text_parts: list[str] = []
-        tool_calls: list[dict] = []
-        tool_results: list[dict] = []
+        tool_calls: list[dict[str, Any]] = []
+        tool_results: list[dict[str, Any]] = []
         for b in content:
             if not isinstance(b, dict):
                 continue
@@ -92,7 +93,7 @@ def request_to_chat(body: dict) -> dict:
                 )
             # image blocks are ignored for now (no vision yet)
         if role == "assistant":
-            msg: dict = {"role": "assistant", "content": "".join(text_parts) or None}
+            msg: dict[str, Any] = {"role": "assistant", "content": "".join(text_parts) or None}
             if tool_calls:
                 msg["tool_calls"] = tool_calls
             messages.append(msg)
@@ -126,7 +127,7 @@ def request_to_chat(body: dict) -> dict:
     }
 
 
-def _tool_choice(choice):
+def _tool_choice(choice: Any) -> Any:
     if not isinstance(choice, dict):
         return None
     t = choice.get("type")
@@ -139,9 +140,9 @@ def _tool_choice(choice):
     return None
 
 
-def _content_blocks(reply) -> tuple[list[dict], str]:
+def _content_blocks(reply: Any) -> tuple[list[dict[str, Any]], str]:
     """Build Anthropic content blocks + stop_reason from a pool Reply."""
-    blocks: list[dict] = []
+    blocks: list[dict[str, Any]] = []
     tool_calls = (reply.message or {}).get("tool_calls") if reply.message else None
     if tool_calls:
         if reply.text:
@@ -165,7 +166,7 @@ def _content_blocks(reply) -> tuple[list[dict], str]:
     return blocks, "end_turn"
 
 
-def reply_to_message(reply, model: str, msg_id: str = "msg_freellmpool") -> dict:
+def reply_to_message(reply: Any, model: str, msg_id: str = "msg_freellmpool") -> dict[str, Any]:
     blocks, stop_reason = _content_blocks(reply)
     return {
         "id": msg_id,
@@ -182,11 +183,11 @@ def reply_to_message(reply, model: str, msg_id: str = "msg_freellmpool") -> dict
     }
 
 
-def reply_to_sse(reply, model: str, msg_id: str = "msg_freellmpool") -> Iterator[str]:
+def reply_to_sse(reply: Any, model: str, msg_id: str = "msg_freellmpool") -> Iterator[str]:
     """Yield Anthropic SSE event blocks (buffered replay of a finished reply)."""
     blocks, stop_reason = _content_blocks(reply)
 
-    def ev(name: str, data: dict) -> str:
+    def ev(name: str, data: dict[str, Any]) -> str:
         return f"event: {name}\ndata: {json.dumps(data)}\n\n"
 
     yield ev(
@@ -260,7 +261,7 @@ def reply_to_sse(reply, model: str, msg_id: str = "msg_freellmpool") -> Iterator
     yield ev("message_stop", {"type": "message_stop"})
 
 
-def estimate_tokens(body: dict) -> int:
+def estimate_tokens(body: dict[str, Any]) -> int:
     """Rough token estimate for /v1/messages/count_tokens (chars/4)."""
     chat = request_to_chat(body)
     chars = sum(len(str(m.get("content") or "")) for m in chat["messages"])

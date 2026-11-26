@@ -404,3 +404,17 @@ def test_load_external_catalog_ignores_invalid_provider_container(tmp_path):
     cache.write_text('{"providers": 7}', encoding="utf-8")
 
     assert load_external_catalog(cache) == []
+
+
+def test_cli_create_provider_with_no_discovered_model_reports_error(tmp_path, monkeypatch, capsys):
+    import argparse
+
+    from freellmpool import catalog, cli
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_load_or_sync_external_catalog", lambda: [])
+    monkeypatch.setattr(catalog, "suggest_external_provider", lambda *a, **k: None)
+    monkeypatch.setattr(catalog, "discover_openai_models", lambda *a, **k: [])
+    args = argparse.Namespace(yes=True, base_url="http://localhost:9/v1", model=None, value=None)
+    assert cli._import_or_create_provider("NoModels", args) is None
+    assert "model is required" in capsys.readouterr().err

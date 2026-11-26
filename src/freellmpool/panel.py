@@ -319,14 +319,14 @@ def _synthesize(
         )
 
 
-def _clamp_int(value: object, default: int, lo: int, hi: int) -> int:
+def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
     try:
         return max(lo, min(hi, int(value)))
     except (TypeError, ValueError):
         return default
 
 
-def _int_or_default(value: object, default: int) -> int:
+def _int_or_default(value: Any, default: int) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):

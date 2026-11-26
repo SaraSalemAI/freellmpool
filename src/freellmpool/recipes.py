@@ -221,7 +221,7 @@ def run_recipe(
     )
 
 
-def write_recipe_record(run: RecipeRun, *, store=None):
+def write_recipe_record(run: RecipeRun, *, store: Any = None) -> Any:
     from .artifacts import RunRecordStore
 
     store = store or RunRecordStore()
